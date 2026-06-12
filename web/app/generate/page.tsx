@@ -11,23 +11,14 @@ import { ThemeProvider, ThemeToggle, useT } from "@/lib/theme";
 import { useAuthGuard } from "@/lib/auth";
 import { authFetch } from "@/lib/fetch-auth";
 
-// ── Loading steps ─────────────────────────────────────────────────────────────
-const STEPS = {
-  template: [
-    "Finding business data",
-    "Detecting trade and location",
-    "Selecting color theme",
-    "Building site structure",
-    "Finalizing layout",
-  ],
-  ai: [
-    "Searching for business data",
-    "Analyzing market context",
-    "Writing headline copy",
-    "Crafting service descriptions",
-    "Scoring conversion rate",
-  ],
-};
+// ── Loading steps (FORGE site_builder) ────────────────────────────────────────
+const BUILD_STEPS = [
+  "Finding business data",
+  "Detecting trade and location",
+  "Selecting color theme",
+  "Building site structure",
+  "Finalizing layout",
+];
 
 const TEMP_COLORS: Record<string, { bg: string; text: string; dot: string; label: string }> = {
   burning: { bg: "rgba(239,68,68,0.12)", text: "#f87171", dot: "#ef4444", label: "Burning Hot" },
@@ -78,9 +69,9 @@ function Skeleton({ style = {} }: { style?: React.CSSProperties }) {
 }
 
 // ── Loading state ─────────────────────────────────────────────────────────────
-function LoadingCard({ mode, step }: { mode: "template" | "ai"; step: number }) {
+function LoadingCard({ step }: { step: number }) {
   const t = useT();
-  const steps = STEPS[mode];
+  const steps = BUILD_STEPS;
   return (
     <motion.div
       key="loading"
@@ -111,7 +102,7 @@ function LoadingCard({ mode, step }: { mode: "template" | "ai"; step: number }) 
           </div>
           <div>
             <p style={{ fontSize: 13, fontWeight: 700, color: t.text, letterSpacing: "-0.01em" }}>
-              {mode === "ai" ? "Claude is writing your copy" : "Building your site"}
+              Building your site with FORGE
             </p>
             <p style={{ fontSize: 12, color: t.muted, marginTop: 2 }}>{steps[step]}</p>
           </div>
@@ -305,16 +296,14 @@ function ResultCard({ result, onSaveToCrm, savedToCrm }: {
             }}>
               {result.business.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}.com
             </div>
-            {result.mode && (
-              <span style={{
-                fontSize: 10, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase",
-                padding: "3px 8px", borderRadius: 99,
-                background: result.mode === "ai" ? "rgba(249,115,22,0.15)" : "rgba(37,99,235,0.15)",
-                color: result.mode === "ai" ? "#fb923c" : "#60a5fa",
-              }}>
-                {result.mode === "ai" ? "AI" : "Template"}
-              </span>
-            )}
+            <span style={{
+              fontSize: 10, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase",
+              padding: "3px 8px", borderRadius: 99,
+              background: "rgba(249,115,22,0.15)",
+              color: "#fb923c",
+            }}>
+              FORGE
+            </span>
           </div>
           <iframe
             srcDoc={result.html}
@@ -507,7 +496,6 @@ export default function GeneratePage() {
   const t = useT();
   const [name, setName] = useState("");
   const [location, setLocation] = useState("");
-  const [mode, setMode] = useState<"template" | "ai">("template");
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState(0);
   const [result, setResult] = useState<GenerateSiteResponse | null>(null);
@@ -523,16 +511,15 @@ export default function GeneratePage() {
     setSavedToCrm(false);
     setStep(0);
 
-    const steps = STEPS[mode];
     const interval = setInterval(() => {
-      setStep((i) => (i < steps.length - 1 ? i + 1 : i));
+      setStep((i) => (i < BUILD_STEPS.length - 1 ? i + 1 : i));
     }, 900);
 
     try {
       const res = await authFetch("/api/generate-site", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: name.trim(), location: location.trim(), mode }),
+        body: JSON.stringify({ name: name.trim(), location: location.trim() }),
       });
       clearInterval(interval);
       if (!res.ok) {
@@ -618,62 +605,9 @@ export default function GeneratePage() {
           }}
         >
           <form onSubmit={handleGenerate}>
-            {/* Mode toggle */}
-            <div style={{
-              display: "flex", gap: 6, padding: 6,
-              background: t.bg2,
-              border: `1px solid ${t.border}`,
-              borderRadius: 12, marginBottom: 24,
-            }}>
-              {(["template", "ai"] as const).map((m) => (
-                <motion.button
-                  key={m}
-                  type="button"
-                  onClick={() => setMode(m)}
-                  whileTap={{ scale: 0.97 }}
-                  style={{
-                    flex: 1,
-                    display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-                    padding: "9px 16px", borderRadius: 8,
-                    fontSize: 13, fontWeight: 700, border: "none", cursor: "pointer",
-                    transition: "all 0.15s",
-                    ...(mode === m ? {
-                      background: t.card,
-                      color: t.text,
-                      boxShadow: t.shadow,
-                    } : {
-                      background: "transparent",
-                      color: t.muted,
-                    }),
-                  }}
-                >
-                  {m === "template" ? (
-                    <>
-                      <svg style={{ width: 13, height: 13 }} viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-                        <rect x="1" y="1" width="12" height="12" rx="2"/>
-                        <path d="M1 5h12M5 5v8"/>
-                      </svg>
-                      Template
-                      <span style={{ fontSize: 10, fontWeight: 700, color: "#52525b", letterSpacing: "0.06em" }}>FREE</span>
-                    </>
-                  ) : (
-                    <>
-                      <svg style={{ width: 13, height: 13 }} viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M7 1v2M7 11v2M1 7h2M11 7h2M3.22 3.22l1.41 1.41M9.36 9.36l1.42 1.42M3.22 10.78l1.41-1.41M9.36 4.64l1.42-1.42"/>
-                        <circle cx="7" cy="7" r="2.5"/>
-                      </svg>
-                      AI Mode
-                      <span style={{
-                        fontSize: 10, fontWeight: 800, letterSpacing: "0.06em",
-                        padding: "2px 7px", borderRadius: 99,
-                        background: "linear-gradient(90deg, #f97316, #ea6c0a)",
-                        color: "#fff",
-                      }}>PRO</span>
-                    </>
-                  )}
-                </motion.button>
-              ))}
-            </div>
+            <p style={{ fontSize: 13, color: t.muted, marginBottom: 20, lineHeight: 1.5 }}>
+              Powered by the FORGE engine — same site builder used in the production pipeline.
+            </p>
 
             {/* Inputs */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
@@ -729,9 +663,7 @@ export default function GeneratePage() {
                   <path style={{ opacity: 0.75 }} fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                 </svg>
               )}
-              {loading
-                ? (mode === "ai" ? "Claude is writing…" : "Building site…")
-                : `Generate ${mode === "ai" ? "AI-powered" : "template"} site`}
+              {loading ? "Building site…" : "Generate demo site"}
             </motion.button>
           </form>
         </motion.div>
@@ -758,7 +690,7 @@ export default function GeneratePage() {
 
         {/* Loading / Results */}
         <AnimatePresence mode="wait">
-          {loading && <LoadingCard key="loading" mode={mode} step={step} />}
+          {loading && <LoadingCard key="loading" step={step} />}
           {result && !loading && (
             <ResultCard
               key="result"

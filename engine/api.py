@@ -20,6 +20,7 @@ from api_auth import PUBLIC_PATHS, is_auth_enabled, validate_api_key
 from config import settings
 from job_dispatcher import celery_available, dispatch
 from repositories import jobs_repo
+from routes.build import router as build_router
 from routes.stripe import router as stripe_router
 from system_logger import log
 
@@ -38,6 +39,7 @@ app.add_middleware(
 )
 
 app.include_router(stripe_router)
+app.include_router(build_router)
 
 
 @app.middleware("http")
@@ -88,7 +90,7 @@ def health():
 
     return {
         "status": "ok",
-        "version": "3.2",
+        "version": "3.3",
         "forge": "running",
         "storage": backend_name(),
         "celery": celery_available(),

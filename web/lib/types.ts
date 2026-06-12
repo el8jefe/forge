@@ -103,13 +103,14 @@ export interface GenerateSiteResponse {
   content: GeneratedContent;
   score: ScoreResult;
   cached: boolean;
-  mode?: "template" | "ai";
-  html?: string; // full generated HTML for template mode
+  mode?: "forge";
+  html?: string;
+  demo_url?: string;
 }
 
 export interface GenerateSiteError {
   error: string;
-  code: "RATE_LIMIT" | "INVALID_INPUT" | "AI_ERROR" | "SCRAPE_ERROR";
+  code: "RATE_LIMIT" | "INVALID_INPUT" | "FORGE_ERROR" | "SCRAPE_ERROR";
 }
 
 // ─── Email ────────────────────────────────────────────────────────────────────

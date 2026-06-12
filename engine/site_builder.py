@@ -1512,6 +1512,113 @@ def push_to_github(folder: str, repo_name: str):
         return None
 
 
+def _parse_location(location: str) -> tuple:
+    """Split 'Denver, CO' into (city, state)."""
+    parts = [p.strip() for p in (location or "").split(",", 1)]
+    city = parts[0] if parts else ""
+    state = parts[1] if len(parts) > 1 else ""
+    return city, state
+
+
+def _infer_business_type(name: str) -> str:
+    try:
+        from scraper import get_business_type
+        return get_business_type(name, "")
+    except Exception:
+        return "hvac"
+
+
+def _read_built_html(city: str, repo_name: str) -> str:
+    city_slug = re.sub(r"[^a-z0-9]", "", city.lower()) if city else ""
+    sites_filename = f"{city_slug}_{repo_name}.html" if city_slug else f"{repo_name}.html"
+    sites_path = os.path.join(SITES_DIR, sites_filename)
+    if os.path.exists(sites_path):
+        with open(sites_path, encoding="utf-8") as f:
+            return f.read()
+    return ""
+
+
+def build_site_for_api(
+    name: str,
+    location: str,
+    *,
+    website: str = "",
+    business_type: str = "",
+    deploy: bool = False,
+    lead_tier: str = "WARM",
+) -> dict:
+    """
+    Build a demo site for the TradeBuilt / FORGE API (Phase 4 canonical generator).
+
+    Parameters:
+        name: Business name.
+        location: City and optional state, e.g. 'Denver, CO'.
+        website: Optional existing website URL to scrape.
+        business_type: Trade type override (hvac, plumber, etc.).
+        deploy: When True, push to GitHub Pages via process_lead.
+        lead_tier: HOT or WARM — affects Unsplash hero usage.
+
+    Returns:
+        dict with html, demo_url, business_name, city, state, business_type, lead_tier, phone.
+    """
+    city, state = _parse_location(location)
+    btype = (business_type or _infer_business_type(name)).strip() or "hvac"
+    lead = {
+        "business_name": name.strip(),
+        "city": city,
+        "state": state,
+        "website_url": (website or "").strip(),
+        "business_type": btype,
+        "lead_tier": (lead_tier or "WARM").upper(),
+    }
+
+    if deploy:
+        demo_url = process_lead(lead)
+        repo_name = re.sub(
+            r"[^a-z0-9-]", "", name.lower().replace(" ", "-").replace("'", "").replace(",", "")
+        )
+        html = _read_built_html(city, repo_name)
+        return {
+            "html": html,
+            "demo_url": demo_url,
+            "business_name": name.strip(),
+            "city": city,
+            "state": state,
+            "business_type": btype,
+            "lead_tier": lead.get("lead_tier", "WARM"),
+            "phone": lead.get("phone", ""),
+        }
+
+    website_url = lead.get("website_url", "")
+    if website_url:
+        info = scrape_website(website_url)
+    else:
+        info = None
+
+    if not info:
+        info = {
+            "name": name.strip(),
+            "phone": "",
+            "address": f"{city}, {state}".strip(", "),
+        }
+
+    t, tkey = get_template(btype)
+    folder, repo_name = build_demo_site(info, lead, t, tkey)
+    with open(os.path.join(folder, "index.html"), encoding="utf-8") as f:
+        html = f.read()
+
+    return {
+        "html": html,
+        "demo_url": None,
+        "business_name": name.strip(),
+        "city": city,
+        "state": state,
+        "business_type": tkey,
+        "lead_tier": lead.get("lead_tier", "WARM"),
+        "phone": (info.get("phone") or "").strip(),
+    }
+
+
 def process_lead(lead: dict):
     """
     Full pipeline for one lead: scrape site info, build demo, push to GitHub.

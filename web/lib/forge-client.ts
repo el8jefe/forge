@@ -9,13 +9,15 @@ const FORGE_API_KEY = process.env.FORGE_API_KEY ?? "";
 export interface ForgeJob {
   id: string;
   type: string;
-  status: "running" | "complete" | "failed";
+  status: "pending" | "running" | "complete" | "failed" | "dead";
   leads_found?: number;
   sites_built?: number;
   emails_sent?: number;
-  started_at: string;
+  started_at?: string;
   completed_at?: string;
   error?: string;
+  params?: Record<string, unknown>;
+  result?: Record<string, unknown>;
 }
 
 export interface ForgeLead {
@@ -36,10 +38,30 @@ export interface ForgeLead {
   created_at: string;
 }
 
+export interface ForgeBuildSiteResult {
+  html: string;
+  demo_url?: string | null;
+  business_name: string;
+  city: string;
+  state: string;
+  business_type: string;
+  lead_tier: string;
+  phone?: string;
+}
+
 export interface ScrapeOptions {
   business_types?: string[];
   states?: string[];
   max_leads?: number;
+}
+
+export interface BuildSiteOptions {
+  name: string;
+  location: string;
+  website?: string;
+  business_type?: string;
+  deploy?: boolean;
+  lead_tier?: string;
 }
 
 function forgeHeaders(extra?: HeadersInit): HeadersInit {
@@ -61,7 +83,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const forge = {
-  health: () => request<{ status: string; version: string }>("/health"),
+  health: () =>
+    request<{ status: string; version: string; celery: boolean; storage: string }>("/health"),
 
   getLeads: (params?: {
     status?: string;
@@ -85,6 +108,12 @@ export const forge = {
       body: JSON.stringify(body),
     }),
 
+  buildSite: (opts: BuildSiteOptions) =>
+    request<ForgeBuildSiteResult>("/build-site", {
+      method: "POST",
+      body: JSON.stringify(opts),
+    }),
+
   startScrape: (opts: ScrapeOptions = {}) =>
     request<{ job_id: string; status: string }>("/scrape", {
       method: "POST",
@@ -100,7 +129,13 @@ export const forge = {
   runFollowup: () =>
     request<{ job_id: string; status: string }>("/followup", { method: "POST" }),
 
+  runPipeline: () =>
+    request<{ job_id: string; status: string }>("/run-pipeline", { method: "POST" }),
+
   getJob: (jobId: string) => request<ForgeJob>(`/jobs/${jobId}`),
+
+  listJobs: (limit = 20) =>
+    request<{ jobs: ForgeJob[] }>(`/jobs?limit=${limit}`),
 
   getStats: () =>
     request<{ total: number; by_status: Record<string, number>; by_tier: Record<string, number> }>(

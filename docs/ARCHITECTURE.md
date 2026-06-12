@@ -1,6 +1,6 @@
 # FORGE Architecture
 
-Last updated: Phase 3 (Celery workers + job persistence)
+Last updated: Phase 4 (Next.js-only UI)
 
 ## Overview
 
@@ -14,13 +14,13 @@ forge/
 └── docs/            Architecture and runbooks
 ```
 
-## Current state (Phase 3)
+## Current state (Phase 4)
 
 | Layer | Technology | Status |
 |-------|------------|--------|
-| Frontend | Next.js 16 (`web/`) | Active — TradeBuilt UI |
-| API | FastAPI (`engine/api.py`) | Active — auth + Stripe webhook |
-| Legacy platform | Flask (`engine/platform/`) | Frozen — retire Phase 4 |
+| Frontend | Next.js 16 (`web/`) | Active — sole UI (`/generate`, `/admin`, `/dashboard`) |
+| API | FastAPI (`engine/api.py`) | Active — auth, Stripe, `POST /build-site` |
+| Legacy platform | Flask (`engine/platform/`) | Retired — `run.py` exits; see `RETIRED.md` |
 | Pipeline scheduler | Celery beat + `agent.py` | Beat @ 00/06/12/18 UTC |
 | Database | Supabase Postgres | `STORAGE_BACKEND=csv\|postgres` |
 | Jobs | Celery + `pipeline_jobs` | Redis broker, in-memory fallback |
@@ -59,7 +59,8 @@ web (Vercel)  →  FastAPI (Railway)  →  Supabase Postgres
 | Path | Responsibility |
 |------|----------------|
 | `app/api/forge/*` | BFF proxy to engine API (auth required) |
-| `app/api/generate-site` | Site generation (auth required) |
+| `app/api/generate-site` | Proxies to FORGE `POST /build-site` (site_builder.py) |
+| `app/admin` | Pipeline ops — scrape, agent, run-pipeline |
 | `app/api/send-email` | Outreach (auth required) |
 | `app/dashboard` | CRM UI |
 | `lib/crm.ts` | Supabase lead store |
@@ -70,7 +71,7 @@ web (Vercel)  →  FastAPI (Railway)  →  Supabase Postgres
 |---------|--------|
 | FastAPI | `X-FORGE-API-Key` or `Bearer` token |
 | TradeBuilt API | Supabase JWT in `Authorization` header |
-| Flask admin | Session + `ADMIN_PASSWORD` |
+| Web admin (`/admin`) | Supabase JWT (same as other routes) |
 
 See `engine/PHASE0-SECURITY.md` for setup.
 
@@ -79,7 +80,7 @@ See `engine/PHASE0-SECURITY.md` for setup.
 - `engine/platform/whitelabel.py` — white-label reseller
 - `engine/pipeline_dashboard.py` — local dev dashboard only
 - `engine/dashboard.py` — superseded by admin portal
-- `web/services/template.ts` + `generator.ts` — duplicate generator (remove Phase 4)
+- `web/services/template.ts` + `generator.ts` — removed Phase 4 (use `site_builder.py`)
 
 ## Configuration
 
@@ -137,10 +138,17 @@ python agent.py --once
 | 1 | Monorepo + foundation | Done |
 | 2 | Postgres as sole source of truth | Done |
 | 3 | FastAPI + Celery, retire Flask | Done |
-| 4 | Next.js only UI | Pending |
+| 4 | Next.js only UI | Done |
 | 5 | Production email, tests, CI | Pending |
 
 ## Changelog
+
+### Phase 4
+- `POST /build-site` on FastAPI — canonical `site_builder.py` generator
+- TradeBuilt `/api/generate-site` proxies to FORGE; removed `template.ts` + `generator.ts`
+- `web/app/admin` — pipeline operations UI (replaces Flask admin)
+- Flask platform retired (`run.py` exits, `platform/RETIRED.md`)
+- See `engine/PHASE4-UI.md`
 
 ### Phase 3
 - Celery app + Redis broker (`celery_app.py`, `tasks/pipeline.py`)

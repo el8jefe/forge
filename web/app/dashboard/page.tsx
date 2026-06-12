@@ -432,6 +432,9 @@ export default function DashboardPage() {
           </Link>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <ThemeToggle />
+            <Link href="/admin" style={{ fontSize: 13, fontWeight: 600, color: t.muted, textDecoration: "none" }}>
+              Admin
+            </Link>
             <Link href="/generate">
               <motion.span
                 whileHover={{ scale: 1.03, boxShadow: "0 0 20px rgba(249,115,22,0.3)" }}
