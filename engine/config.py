@@ -65,8 +65,23 @@ class Settings(BaseSettings):
     # Storage backend (Phase 2): csv | postgres
     storage_backend: str = Field(default="csv", alias="STORAGE_BACKEND")
 
+    # Celery / Redis (Phase 3)
+    redis_url: str = Field(default="redis://localhost:6379/0", alias="REDIS_URL")
+    celery_broker_url: str = Field(default="", alias="CELERY_BROKER_URL")
+    celery_result_backend: str = Field(default="", alias="CELERY_RESULT_BACKEND")
+    use_celery: bool = Field(default=True, alias="USE_CELERY")
+    forge_role: str = Field(default="api", alias="FORGE_ROLE")  # api | worker | beat
+
     # Pipeline dashboard (deprecated)
     forge_dashboard_enabled: bool = Field(default=True, alias="FORGE_DASHBOARD_ENABLED")
+
+    @property
+    def celery_broker(self) -> str:
+        return self.celery_broker_url.strip() or self.redis_url
+
+    @property
+    def celery_backend(self) -> str:
+        return self.celery_result_backend.strip() or self.celery_broker
 
     @property
     def simulation_mode(self) -> bool:

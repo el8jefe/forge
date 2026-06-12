@@ -1,4 +1,4 @@
-# FORGE Engine — Dockerfile scaffold (completed in Phase 3)
+# FORGE Engine — API + Celery worker image (Phase 3)
 FROM python:3.11-slim
 
 WORKDIR /app
@@ -6,6 +6,8 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
+RUN chmod +x entrypoint.sh
 
 EXPOSE 8000
-CMD ["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "8000"]
+ENV FORGE_ROLE=api
+CMD ["./entrypoint.sh"]

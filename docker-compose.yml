@@ -1,6 +1,7 @@
-# FORGE local development stack (Phase 1 scaffold)
-# Usage: docker compose up -d redis
-# API and workers run on host until Phase 3 Dockerfiles land.
+# FORGE local development stack (Phase 3)
+# Usage:
+#   docker compose up -d          # redis + api + worker + beat
+#   docker compose up -d redis    # redis only (run api on host)
 
 services:
   redis:
@@ -9,6 +10,52 @@ services:
       - "6379:6379"
     volumes:
       - forge_redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  api:
+    build:
+      context: ./engine
+    ports:
+      - "8000:8000"
+    environment:
+      FORGE_ROLE: api
+      REDIS_URL: redis://redis:6379/0
+      USE_CELERY: "true"
+    env_file:
+      - ./engine/.env
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: ./engine
+    environment:
+      FORGE_ROLE: worker
+      REDIS_URL: redis://redis:6379/0
+      USE_CELERY: "true"
+    env_file:
+      - ./engine/.env
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  beat:
+    build:
+      context: ./engine
+    environment:
+      FORGE_ROLE: beat
+      REDIS_URL: redis://redis:6379/0
+      USE_CELERY: "true"
+    env_file:
+      - ./engine/.env
+    depends_on:
+      redis:
+        condition: service_healthy
 
 volumes:
   forge_redis:

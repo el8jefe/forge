@@ -458,24 +458,21 @@ def webhook_simulate():
 </html>""", plan_name=plan["name"])
 
 
-@stripe_bp.route("/webhook/stripe", methods=["POST"])
-def webhook_stripe():
+def process_stripe_webhook(payload: bytes, sig_header: str) -> tuple:
     """
-    Stripe webhook endpoint. Verifies signature and processes checkout.session.completed.
-    Always returns HTTP 200 to Stripe after signature verification succeeds.
-    """
-    payload = request.get_data(as_text=False)
-    sig_header = request.headers.get("Stripe-Signature", "")
+    Framework-agnostic Stripe webhook handler (used by FastAPI in Phase 3).
 
+    Returns:
+        tuple: (status_code, response_body)
+    """
     try:
         import stripe as stripe_lib
         stripe_lib.api_key = STRIPE_SECRET_KEY
         event = stripe_lib.Webhook.construct_event(payload, sig_header, STRIPE_WEBHOOK_SECRET)
     except Exception as e:
         log("webhook_stripe", "ERROR", f"Signature verification failed: {e}")
-        return Response("Invalid signature", status=400)
+        return 400, "Invalid signature"
 
-    # Always return 200 after verification — Stripe expects this
     try:
         if event.get("type") == "checkout.session.completed":
             session = event["data"]["object"]
@@ -486,10 +483,21 @@ def webhook_stripe():
                 handle_conversion(slug, tier, session)
             else:
                 log("webhook_stripe", "WARN", f"Missing metadata in session {session.get('id', '')}")
-    except Exception as e:
+    except Exception:
         log("webhook_stripe", "ERROR", f"handle_conversion failed: {traceback.format_exc()[:400]}")
 
-    return Response("OK", status=200)
+    return 200, "OK"
+
+
+@stripe_bp.route("/webhook/stripe", methods=["POST"])
+def webhook_stripe():
+    """
+    LEGACY Flask webhook — prefer FastAPI POST /webhook/stripe (Phase 3).
+    """
+    payload = request.get_data(as_text=False)
+    sig_header = request.headers.get("Stripe-Signature", "")
+    status_code, body = process_stripe_webhook(payload, sig_header)
+    return Response(body, status=status_code)
 
 
 @stripe_bp.route("/success", methods=["GET"])

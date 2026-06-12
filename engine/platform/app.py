@@ -1,8 +1,10 @@
 """
 platform/app.py — FORGE Central Flask Application
 
-LEGACY (Phase 1): Retained for admin portal and Stripe during migration.
-Replaced by forge/engine FastAPI + forge/web Next.js in Phase 3–4.
+LEGACY (Phase 3 — FROZEN): Do not extend. Admin portal and checkout UI only.
+- Stripe webhook → FastAPI POST /webhook/stripe
+- Pipeline jobs → Celery + POST /run-pipeline
+- Retire entirely in Phase 4
 Registers all blueprints, configures sessions, CSRF, error handlers,
 request logging, and core routes (landing, demo claim, health check).
 """

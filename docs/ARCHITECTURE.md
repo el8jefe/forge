@@ -1,6 +1,6 @@
 # FORGE Architecture
 
-Last updated: Phase 2 (Postgres storage layer)
+Last updated: Phase 3 (Celery workers + job persistence)
 
 ## Overview
 
@@ -14,16 +14,16 @@ forge/
 └── docs/            Architecture and runbooks
 ```
 
-## Current state (Phase 2)
+## Current state (Phase 3)
 
 | Layer | Technology | Status |
 |-------|------------|--------|
 | Frontend | Next.js 16 (`web/`) | Active — TradeBuilt UI |
-| API | FastAPI (`engine/api.py`) | Active — auth required |
-| Legacy platform | Flask (`engine/platform/`) | Deprecated — admin/Stripe only |
-| Pipeline scheduler | `agent.py` + `schedule` | Active — storage abstraction |
+| API | FastAPI (`engine/api.py`) | Active — auth + Stripe webhook |
+| Legacy platform | Flask (`engine/platform/`) | Frozen — retire Phase 4 |
+| Pipeline scheduler | Celery beat + `agent.py` | Beat @ 00/06/12/18 UTC |
 | Database | Supabase Postgres | `STORAGE_BACKEND=csv\|postgres` |
-| Jobs | In-process BackgroundTasks | Fragile — Celery in Phase 3 |
+| Jobs | Celery + `pipeline_jobs` | Redis broker, in-memory fallback |
 | Email | Gmail SMTP | Dev only — Resend in Phase 5 |
 
 ## Target state (post-migration)
@@ -45,7 +45,10 @@ web (Vercel)  →  FastAPI (Railway)  →  Supabase Postgres
 | `logo_generator.py` | Trade SVG logos/icons | — |
 | `emailer.py` | Outreach + warmup | `storage/counters_storage` |
 | `agent.py` | Pipeline orchestration | storage layer |
-| `api.py` | HTTP API for web app | storage + jobs dict |
+| `api.py` | HTTP API for web app | Celery dispatch + `pipeline_jobs` |
+| `celery_app.py` | Worker configuration | Redis |
+| `tasks/pipeline.py` | Async job definitions | Celery |
+| `job_dispatcher.py` | Celery or BackgroundTasks | Redis fallback |
 | `platform/` | Legacy Flask SaaS | CSV, JSON (legacy) |
 | `db.py` | Supabase REST client | `repositories/` |
 | `storage/` | CSV ↔ Postgres facade | `STORAGE_BACKEND` |
@@ -90,6 +93,16 @@ Key Phase 2 variable:
 
 When `postgres`: set `SUPABASE_URL` + `SUPABASE_SERVICE_KEY`, run migration `003_phase2_pipeline.sql`, then import existing CSV data with `python scripts/import_csv.py`.
 
+Phase 3 variables:
+
+| Variable | Purpose | Default |
+|----------|---------|---------|
+| `REDIS_URL` | Celery broker | `redis://localhost:6379/0` |
+| `USE_CELERY` | Enable worker queue | `true` |
+| `FORGE_ROLE` | `api` / `worker` / `beat` | `api` |
+
+See `engine/PHASE3-WORKERS.md` for Railway multi-service setup.
+
 Environment templates:
 - `engine/.env.example`
 - `web/.env.local.example`
@@ -97,8 +110,9 @@ Environment templates:
 ## Local development
 
 ```bash
-# Terminal 1 — Redis (optional, for Phase 3 prep)
+# Terminal 1 — Redis + workers (or redis only)
 cd forge && docker compose up -d redis
+# Full stack: docker compose up -d
 
 # Terminal 2 — Engine API
 cd forge/engine
@@ -122,11 +136,19 @@ python agent.py --once
 | 0 | Emergency security | Done |
 | 1 | Monorepo + foundation | Done |
 | 2 | Postgres as sole source of truth | Done |
-| 3 | FastAPI + Celery, retire Flask | Pending |
+| 3 | FastAPI + Celery, retire Flask | Done |
 | 4 | Next.js only UI | Pending |
 | 5 | Production email, tests, CI | Pending |
 
 ## Changelog
+
+### Phase 3
+- Celery app + Redis broker (`celery_app.py`, `tasks/pipeline.py`)
+- Job persistence via `pipeline_jobs` (`repositories/jobs_repo.py`)
+- `job_dispatcher.py` — Celery with BackgroundTasks fallback
+- Stripe webhook on FastAPI (`POST /webhook/stripe`)
+- `POST /run-pipeline` endpoint; Docker Compose api/worker/beat services
+- Flask platform marked frozen; see `engine/PHASE3-WORKERS.md`
 
 ### Phase 2
 - Added `STORAGE_BACKEND` flag (`csv` default, `postgres` for Supabase)

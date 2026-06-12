@@ -1,5 +1,7 @@
-# Railway deployment scaffold (Phase 1 — filled in Phase 3)
-# https://docs.railway.app/reference/config-as-code
+# Railway — FORGE API service (Phase 3)
+# Deploy worker + beat as separate services with same Dockerfile.
+# Set FORGE_ROLE=worker or FORGE_ROLE=beat on those services.
+# See engine/PHASE3-WORKERS.md
 
 [build]
 builder = "DOCKERFILE"

@@ -7,8 +7,6 @@ Default port: 8000
 """
 
 import os
-import uuid
-import threading
 import datetime
 from typing import Optional, List
 
@@ -20,11 +18,14 @@ from dotenv import load_dotenv
 
 from api_auth import PUBLIC_PATHS, is_auth_enabled, validate_api_key
 from config import settings
+from job_dispatcher import celery_available, dispatch
+from repositories import jobs_repo
+from routes.stripe import router as stripe_router
 from system_logger import log
 
 load_dotenv()
 
-app = FastAPI(title="FORGE API", version="3.1")
+app = FastAPI(title="FORGE API", version="3.2")
 
 _cors_origins = settings.cors_origins_list
 
@@ -35,6 +36,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(stripe_router)
 
 
 @app.middleware("http")
@@ -55,37 +58,6 @@ async def require_forge_api_key(request: Request, call_next):
         )
         return JSONResponse(status_code=status, content={"detail": detail})
     return await call_next(request)
-
-# ── In-memory job tracker (replaced by Supabase in production) ──────────────
-_jobs: dict = {}
-
-
-def _new_job(job_type: str, params: dict) -> str:
-    job_id = str(uuid.uuid4())
-    _jobs[job_id] = {
-        "id": job_id,
-        "type": job_type,
-        "status": "running",
-        "params": params,
-        "leads_found": 0,
-        "sites_built": 0,
-        "emails_sent": 0,
-        "started_at": datetime.datetime.utcnow().isoformat(),
-        "completed_at": None,
-        "error": None,
-    }
-    return job_id
-
-
-def _finish_job(job_id: str, result: dict = None, error: str = None):
-    if job_id not in _jobs:
-        return
-    _jobs[job_id]["status"] = "failed" if error else "complete"
-    _jobs[job_id]["completed_at"] = datetime.datetime.utcnow().isoformat()
-    if error:
-        _jobs[job_id]["error"] = error
-    if result:
-        _jobs[job_id].update(result)
 
 
 # ── Request models ────────────────────────────────────────────────────────────
@@ -112,10 +84,15 @@ class UpdateLeadRequest(BaseModel):
 
 @app.get("/health")
 def health():
+    from storage import backend_name
+
     return {
         "status": "ok",
-        "version": "3.0",
+        "version": "3.2",
         "forge": "running",
+        "storage": backend_name(),
+        "celery": celery_available(),
+        "role": settings.forge_role,
         "timestamp": datetime.datetime.utcnow().isoformat(),
     }
 
@@ -149,11 +126,11 @@ def get_leads(
 def update_lead(lead_id: str, body: UpdateLeadRequest):
     """Update lead status, notes, or approval."""
     try:
-        from db import update_lead
+        from db import update_lead as db_update_lead
         updates = {k: v for k, v in body.dict().items() if v is not None}
         if not updates:
             raise HTTPException(status_code=400, detail="No fields to update")
-        result = update_lead(lead_id, updates)
+        result = db_update_lead(lead_id, updates)
         return {"lead": result[0] if result else None}
     except HTTPException:
         raise
@@ -163,102 +140,37 @@ def update_lead(lead_id: str, body: UpdateLeadRequest):
 
 # ── Scrape ────────────────────────────────────────────────────────────────────
 
-def _run_scrape(job_id: str, req: ScrapeRequest):
-    try:
-        from scraper import run_scraper
-        from storage.leads_storage import save_leads
-
-        email_leads, call_leads = run_scraper()
-        if email_leads or call_leads:
-            save_leads(email_leads, call_leads)
-
-        _finish_job(job_id, {"leads_found": len(email_leads) + len(call_leads)})
-    except Exception as e:
-        _finish_job(job_id, error=str(e))
-
-
 @app.post("/scrape")
 def start_scrape(req: ScrapeRequest, background_tasks: BackgroundTasks):
     """Kick off a background scrape run."""
-    job_id = _new_job("scrape", req.dict())
-    background_tasks.add_task(_run_scrape, job_id, req)
+    job_id = dispatch("scrape", req.dict(), background_tasks=background_tasks)
     return {"job_id": job_id, "status": "running"}
 
 
 # ── Agent (build sites + send emails) ────────────────────────────────────────
 
-def _run_agent(job_id: str, req: RunAgentRequest):
-    try:
-        from site_builder import process_lead
-        from emailer import send_batch
-        from storage.leads_storage import load_all_leads, update_lead
-        from storage.outreach_storage import log_sent
-
-        sites_built = 0
-        emails_sent = 0
-
-        leads = [
-            row for row in load_all_leads()
-            if (not req.lead_ids or row.get("id") in req.lead_ids)
-            and row.get("email_sent", "").lower() != "true"
-        ]
-
-        demo_urls: dict = {}
-        for lead in leads:
-            name = (lead.get("business_name") or lead.get("name", "")).strip()
-            try:
-                demo_url = process_lead(lead)
-                sites_built += 1
-                if demo_url and name:
-                    demo_urls[name] = demo_url
-                    update_lead(name, {"demo_site_path": demo_url})
-                elif lead.get("demo_site_path"):
-                    demo_urls[name] = lead["demo_site_path"]
-            except Exception as e:
-                log("run_agent", "ERROR", f"site build {name}: {e}")
-
-        if req.send_emails and demo_urls:
-            sent, _failed, sent_names = send_batch(leads, demo_urls, stagger=True)
-            emails_sent = sent
-            sent_set = {n.lower() for n in sent_names}
-            for lead in leads:
-                name = (lead.get("business_name") or "").strip()
-                if name.lower() in sent_set:
-                    log_sent(lead, demo_urls.get(name, ""))
-                    update_lead(name, {
-                        "email_sent": "true",
-                        "email_sent_date": datetime.datetime.now().strftime("%Y-%m-%d"),
-                    })
-
-        _finish_job(job_id, {"sites_built": sites_built, "emails_sent": emails_sent})
-    except Exception as e:
-        _finish_job(job_id, error=str(e))
-
-
 @app.post("/run-agent")
 def run_agent(req: RunAgentRequest, background_tasks: BackgroundTasks):
     """Build demo sites and send outreach emails for pending leads."""
-    job_id = _new_job("agent", req.dict())
-    background_tasks.add_task(_run_agent, job_id, req)
+    job_id = dispatch("agent", req.dict(), background_tasks=background_tasks)
     return {"job_id": job_id, "status": "running"}
 
 
 # ── Follow-up ─────────────────────────────────────────────────────────────────
 
-def _run_followup(job_id: str):
-    try:
-        from followup import run_followup
-        sent = run_followup()
-        _finish_job(job_id, {"emails_sent": sent})
-    except Exception as e:
-        _finish_job(job_id, error=str(e))
-
-
 @app.post("/followup")
 def run_followup_endpoint(background_tasks: BackgroundTasks):
     """Send 3-day follow-up emails to non-responders."""
-    job_id = _new_job("followup", {})
-    background_tasks.add_task(_run_followup, job_id)
+    job_id = dispatch("followup", {}, background_tasks=background_tasks)
+    return {"job_id": job_id, "status": "running"}
+
+
+# ── Pipeline cycle (full agent cycle) ─────────────────────────────────────────
+
+@app.post("/run-pipeline")
+def run_pipeline(background_tasks: BackgroundTasks):
+    """Run one full pipeline cycle (scrape → build → send)."""
+    job_id = dispatch("pipeline_cycle", {}, background_tasks=background_tasks)
     return {"job_id": job_id, "status": "running"}
 
 
@@ -266,15 +178,15 @@ def run_followup_endpoint(background_tasks: BackgroundTasks):
 
 @app.get("/jobs/{job_id}")
 def get_job(job_id: str):
-    job = _jobs.get(job_id)
+    job = jobs_repo.get(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
     return job
 
 
 @app.get("/jobs")
-def list_jobs():
-    return {"jobs": list(_jobs.values())}
+def list_jobs(limit: int = 50):
+    return {"jobs": jobs_repo.list_jobs(limit=limit)}
 
 
 # ── Stats ─────────────────────────────────────────────────────────────────────
