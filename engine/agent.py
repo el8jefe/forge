@@ -14,15 +14,16 @@ import schedule
 from dotenv import load_dotenv
 
 from system_logger import log, check_for_failures
-from scraper import run_scraper, save_leads, CSV_COLUMNS, LEADS_CSV
+from scraper import run_scraper
 from site_builder import process_lead
 from emailer import send_batch, get_today_count, get_daily_limit, send_summary_email
 from notifications import fire_notification
+from storage.leads_storage import save_leads, load_all_leads, update_lead
+from storage.outreach_storage import log_sent, load_already_contacted, sync_demos_from_log
 
 load_dotenv()
 
 SCRIPT_DIR    = os.path.dirname(os.path.abspath(__file__))
-LOG_CSV       = os.path.join(SCRIPT_DIR, "log.csv")
 APPROVAL_MODE = os.getenv("APPROVAL_MODE", "false").lower() == "true"
 RETRY_QUEUE_FILE = os.path.join(SCRIPT_DIR, "demo_retry_queue.json")
 READY_TO_SEND_REPORT = os.path.join(SCRIPT_DIR, "ready_to_send.csv")
@@ -31,67 +32,6 @@ MAX_RETRIES = 3
 
 
 # ─── UTILITIES ────────────────────────────────────────────────────────────────
-
-def load_already_contacted() -> set:
-    """Return set of business names that were successfully emailed (email_sent=True in log.csv)."""
-    contacted = set()
-    if not os.path.exists(LOG_CSV):
-        return contacted
-    with open(LOG_CSV, "r") as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            sent_flag = (row.get("email_sent") or "").strip().lower()
-            if sent_flag != "true":
-                continue  # failed/partial log entries don't block retries
-            n = (row.get("business_name") or row.get("name", "")).strip().lower()
-            if n:
-                contacted.add(n)
-    return contacted
-
-
-def sync_demos_from_log():
-    """
-    Back-fill demo_site_path in leads.csv from log.csv entries where a demo URL was
-    recorded but the email failed. Prevents re-building demos that already exist.
-    """
-    if not os.path.exists(LOG_CSV):
-        return
-    demo_from_log = {}
-    with open(LOG_CSV, "r") as f:
-        for row in csv.DictReader(f):
-            name = (row.get("business_name") or row.get("name", "")).strip()
-            url = (row.get("demo_url") or "").strip()
-            if name and url:
-                demo_from_log[name.lower()] = url
-
-    if not demo_from_log or not os.path.exists(LEADS_CSV):
-        return
-    rows, fieldnames, updated = [], None, 0
-    with open(LEADS_CSV, "r") as f:
-        reader = csv.DictReader(f)
-        fieldnames = reader.fieldnames
-        for row in reader:
-            name = (row.get("business_name") or "").strip()
-            if not (row.get("demo_site_path") or "").strip() and name.lower() in demo_from_log:
-                row["demo_site_path"] = demo_from_log[name.lower()]
-                updated += 1
-            rows.append(row)
-    if updated and fieldnames:
-        with open(LEADS_CSV, "w", newline="") as f:
-            writer = csv.DictWriter(f, fieldnames=fieldnames)
-            writer.writeheader()
-            writer.writerows(rows)
-        log("sync_demos", "INFO", f"Back-filled {updated} demo URLs from log.csv into leads.csv")
-
-
-def load_all_leads() -> list:
-    """Load all leads from leads.csv."""
-    if not os.path.exists(LEADS_CSV):
-        return []
-    with open(LEADS_CSV, "r") as f:
-        reader = csv.DictReader(f)
-        return list(reader)
-
 
 def load_retry_queue() -> dict:
     """Load persisted demo build retry queue."""
@@ -160,44 +100,6 @@ def write_ready_to_send_report(leads: list, demo_urls: dict):
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
         writer.writerows(rows)
-
-
-def update_lead_in_csv(business_name: str, updates: dict):
-    """Update fields in leads.csv for a given business."""
-    if not os.path.exists(LEADS_CSV):
-        return
-    rows = []
-    fieldnames = None
-    with open(LEADS_CSV, "r") as f:
-        reader = csv.DictReader(f)
-        fieldnames = reader.fieldnames
-        for row in reader:
-            n = (row.get("business_name") or row.get("name", "")).strip()
-            if n.lower() == business_name.lower():
-                row.update(updates)
-            rows.append(row)
-    if fieldnames:
-        with open(LEADS_CSV, "w", newline="") as f:
-            writer = csv.DictWriter(f, fieldnames=fieldnames)
-            writer.writeheader()
-            writer.writerows(rows)
-
-
-def log_sent(lead: dict, demo_url: str):
-    """Append to log.csv to track what was emailed."""
-    file_exists = os.path.exists(LOG_CSV)
-    with open(LOG_CSV, "a", newline="") as f:
-        fieldnames = ["date", "business_name", "email", "demo_url", "email_sent"]
-        writer = csv.DictWriter(f, fieldnames=fieldnames)
-        if not file_exists:
-            writer.writeheader()
-        writer.writerow({
-            "date": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
-            "business_name": (lead.get("business_name") or lead.get("name", "")).strip(),
-            "email": lead.get("email", ""),
-            "demo_url": demo_url,
-            "email_sent": "True",
-        })
 
 
 def print_banner(lead_count: int, emails_today: int):
@@ -315,7 +217,7 @@ def run_pipeline_cycle():
         demo_url = step_with_retry(f"build_site_{name[:20]}", process_lead, lead)
         if demo_url:
             demo_urls[name] = demo_url
-            update_lead_in_csv(name, {"demo_site_path": demo_url})
+            update_lead(name, {"demo_site_path": demo_url})
             sites_built += 1
             retry_queue.pop(name.lower(), None)
         else:
@@ -378,7 +280,7 @@ def run_pipeline_cycle():
             if name.lower() not in sent_name_set:
                 continue
             log_sent(lead, demo_urls.get(name, ""))
-            update_lead_in_csv(name, {
+            update_lead(name, {
                 "email_sent": "true",
                 "email_sent_date": datetime.datetime.now().strftime("%Y-%m-%d"),
             })

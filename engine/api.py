@@ -165,24 +165,14 @@ def update_lead(lead_id: str, body: UpdateLeadRequest):
 
 def _run_scrape(job_id: str, req: ScrapeRequest):
     try:
-        from scraper import run_scraper, save_leads
-        leads = run_scraper(
-            business_types=req.business_types,
-            states=req.states,
-            max_leads=req.max_leads,
-        )
-        # Save to Supabase
-        try:
-            from db import upsert_leads, leads_to_rows
-            rows = leads_to_rows(leads)
-            if rows:
-                upsert_leads(rows)
-        except Exception as db_err:
-            print(f"[FORGE API] DB write warning: {db_err}")
-            # Fall back to CSV
-            save_leads(leads)
+        from scraper import run_scraper
+        from storage.leads_storage import save_leads
 
-        _finish_job(job_id, {"leads_found": len(leads)})
+        email_leads, call_leads = run_scraper()
+        if email_leads or call_leads:
+            save_leads(email_leads, call_leads)
+
+        _finish_job(job_id, {"leads_found": len(email_leads) + len(call_leads)})
     except Exception as e:
         _finish_job(job_id, error=str(e))
 
@@ -199,40 +189,46 @@ def start_scrape(req: ScrapeRequest, background_tasks: BackgroundTasks):
 
 def _run_agent(job_id: str, req: RunAgentRequest):
     try:
-        import csv, os
         from site_builder import process_lead
         from emailer import send_batch
+        from storage.leads_storage import load_all_leads, update_lead
+        from storage.outreach_storage import log_sent
 
-        LEADS_CSV = os.path.join(os.path.dirname(__file__), "leads.csv")
         sites_built = 0
         emails_sent = 0
 
-        if os.path.exists(LEADS_CSV):
-            leads = []
-            with open(LEADS_CSV) as f:
-                for row in csv.DictReader(f):
-                    if req.lead_ids and row.get("id") not in req.lead_ids:
-                        continue
-                    if row.get("email_sent", "").lower() == "true":
-                        continue
-                    leads.append(row)
+        leads = [
+            row for row in load_all_leads()
+            if (not req.lead_ids or row.get("id") in req.lead_ids)
+            and row.get("email_sent", "").lower() != "true"
+        ]
 
-            demo_urls: dict = {}
+        demo_urls: dict = {}
+        for lead in leads:
+            name = (lead.get("business_name") or lead.get("name", "")).strip()
+            try:
+                demo_url = process_lead(lead)
+                sites_built += 1
+                if demo_url and name:
+                    demo_urls[name] = demo_url
+                    update_lead(name, {"demo_site_path": demo_url})
+                elif lead.get("demo_site_path"):
+                    demo_urls[name] = lead["demo_site_path"]
+            except Exception as e:
+                log("run_agent", "ERROR", f"site build {name}: {e}")
+
+        if req.send_emails and demo_urls:
+            sent, _failed, sent_names = send_batch(leads, demo_urls, stagger=True)
+            emails_sent = sent
+            sent_set = {n.lower() for n in sent_names}
             for lead in leads:
-                name = (lead.get("business_name") or lead.get("name", "")).strip()
-                try:
-                    demo_url = process_lead(lead)
-                    sites_built += 1
-                    if demo_url and name:
-                        demo_urls[name] = demo_url
-                    elif lead.get("demo_site_path"):
-                        demo_urls[name] = lead["demo_site_path"]
-                except Exception as e:
-                    log("run_agent", "ERROR", f"site build {name}: {e}")
-
-            if req.send_emails and demo_urls:
-                sent, _failed, _names = send_batch(leads, demo_urls, stagger=True)
-                emails_sent = sent
+                name = (lead.get("business_name") or "").strip()
+                if name.lower() in sent_set:
+                    log_sent(lead, demo_urls.get(name, ""))
+                    update_lead(name, {
+                        "email_sent": "true",
+                        "email_sent_date": datetime.datetime.now().strftime("%Y-%m-%d"),
+                    })
 
         _finish_job(job_id, {"sites_built": sites_built, "emails_sent": emails_sent})
     except Exception as e:

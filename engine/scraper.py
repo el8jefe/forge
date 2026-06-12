@@ -1063,41 +1063,9 @@ def run_scraper(cities_filter=None):
 
 
 def save_leads(email_leads, call_leads):
-    """Append new leads to CSV files."""
-    if email_leads:
-        file_exists = os.path.exists(LEADS_CSV)
-        # If existing file has old schema (has 'name' column), rename it
-        if file_exists:
-            with open(LEADS_CSV) as f:
-                header = f.readline()
-            if "business_name" not in header:
-                shutil.move(LEADS_CSV, os.path.join(SCRIPT_DIR, "leads_backup.csv"))
-                file_exists = False
-
-        with open(LEADS_CSV, "a", newline="") as f:
-            writer = csv.DictWriter(f, fieldnames=CSV_COLUMNS)
-            if not file_exists:
-                writer.writeheader()
-            writer.writerows(email_leads)
-        print(f"\n{len(email_leads)} email leads saved to leads.csv")
-        log("save_leads", "SUCCESS", f"{len(email_leads)} email leads written")
-
-    if call_leads:
-        file_exists = os.path.exists(CALL_LIST_CSV)
-        if file_exists:
-            with open(CALL_LIST_CSV) as f:
-                header = f.readline()
-            if "business_name" not in header:
-                shutil.move(CALL_LIST_CSV, os.path.join(SCRIPT_DIR, "call_list_backup.csv"))
-                file_exists = False
-
-        with open(CALL_LIST_CSV, "a", newline="") as f:
-            writer = csv.DictWriter(f, fieldnames=CSV_COLUMNS)
-            if not file_exists:
-                writer.writeheader()
-            writer.writerows(call_leads)
-        print(f"{len(call_leads)} call leads saved to call_list.csv")
-        log("save_leads", "SUCCESS", f"{len(call_leads)} call leads written")
+    """Persist new leads via storage layer (CSV or Postgres)."""
+    from storage.leads_storage import save_leads as _persist
+    _persist(email_leads, call_leads)
 
 
 def backfill_owner_names(csv_path: str = LEADS_CSV, limit: int = 0) -> dict:

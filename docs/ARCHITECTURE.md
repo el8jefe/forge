@@ -1,6 +1,6 @@
 # FORGE Architecture
 
-Last updated: Phase 1 (foundation cleanup)
+Last updated: Phase 2 (Postgres storage layer)
 
 ## Overview
 
@@ -14,15 +14,15 @@ forge/
 └── docs/            Architecture and runbooks
 ```
 
-## Current state (Phase 1)
+## Current state (Phase 2)
 
 | Layer | Technology | Status |
 |-------|------------|--------|
 | Frontend | Next.js 16 (`web/`) | Active — TradeBuilt UI |
 | API | FastAPI (`engine/api.py`) | Active — auth required |
 | Legacy platform | Flask (`engine/platform/`) | Deprecated — admin/Stripe only |
-| Pipeline scheduler | `agent.py` + `schedule` | Active — CSV-backed |
-| Database | Supabase Postgres | Partial — `db.py` + CSV fallback |
+| Pipeline scheduler | `agent.py` + `schedule` | Active — storage abstraction |
+| Database | Supabase Postgres | `STORAGE_BACKEND=csv\|postgres` |
 | Jobs | In-process BackgroundTasks | Fragile — Celery in Phase 3 |
 | Email | Gmail SMTP | Dev only — Resend in Phase 5 |
 
@@ -40,14 +40,16 @@ web (Vercel)  →  FastAPI (Railway)  →  Supabase Postgres
 
 | Module | Responsibility | Data |
 |--------|----------------|------|
-| `scraper.py` | Google Places discovery + scoring | CSV / Supabase |
+| `scraper.py` | Google Places discovery + scoring | `storage/leads_storage` |
 | `site_builder.py` | Demo HTML + deploy | `sites/`, GitHub Pages |
 | `logo_generator.py` | Trade SVG logos/icons | — |
-| `emailer.py` | Outreach + warmup | JSON logs, CSV |
-| `agent.py` | Pipeline orchestration | CSV |
-| `api.py` | HTTP API for web app | Supabase, jobs dict |
-| `platform/` | Legacy Flask SaaS | CSV, JSON |
-| `db.py` | Supabase REST client | Postgres |
+| `emailer.py` | Outreach + warmup | `storage/counters_storage` |
+| `agent.py` | Pipeline orchestration | storage layer |
+| `api.py` | HTTP API for web app | storage + jobs dict |
+| `platform/` | Legacy Flask SaaS | CSV, JSON (legacy) |
+| `db.py` | Supabase REST client | `repositories/` |
+| `storage/` | CSV ↔ Postgres facade | `STORAGE_BACKEND` |
+| `repositories/` | PostgREST data access | Supabase |
 
 ## Web modules
 
@@ -80,6 +82,14 @@ See `engine/PHASE0-SECURITY.md` for setup.
 
 All engine settings: `engine/config.py` (`Settings` via pydantic-settings).
 
+Key Phase 2 variable:
+
+| Variable | Values | Default |
+|----------|--------|---------|
+| `STORAGE_BACKEND` | `csv` \| `postgres` | `csv` |
+
+When `postgres`: set `SUPABASE_URL` + `SUPABASE_SERVICE_KEY`, run migration `003_phase2_pipeline.sql`, then import existing CSV data with `python scripts/import_csv.py`.
+
 Environment templates:
 - `engine/.env.example`
 - `web/.env.local.example`
@@ -111,12 +121,21 @@ python agent.py --once
 |-------|-------|--------|
 | 0 | Emergency security | Done |
 | 1 | Monorepo + foundation | Done |
-| 2 | Postgres as sole source of truth | Pending |
+| 2 | Postgres as sole source of truth | Done |
 | 3 | FastAPI + Celery, retire Flask | Pending |
 | 4 | Next.js only UI | Pending |
 | 5 | Production email, tests, CI | Pending |
 
 ## Changelog
+
+### Phase 2
+- Added `STORAGE_BACKEND` flag (`csv` default, `postgres` for Supabase)
+- Storage facade: `engine/storage/` (leads, outreach, counters)
+- Repositories: `engine/repositories/` (PostgREST client, lead mapper, upserts on `dedup_key`)
+- Migration `003_phase2_pipeline.sql` (pipeline columns, `email_send_counters`, `pipeline_jobs`)
+- Wired `agent.py`, `scraper.py`, `emailer.py`, `api.py`, `db.py` through storage layer
+- CSV import script: `engine/scripts/import_csv.py`
+- Unit tests: `engine/tests/test_lead_mapper.py`
 
 ### Phase 1
 - Created `forge/` monorepo (`engine/` + `web/`)

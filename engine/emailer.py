@@ -62,17 +62,8 @@ def load_warmup_state() -> dict:
     Returns:
         dict: warmup state with start_date, current_day, daily_limit_override.
     """
-    if not os.path.exists(WARMUP_FILE):
-        state = {
-            "start_date": datetime.date.today().isoformat(),
-            "current_day": 1,
-            "daily_limit_override": WARMUP_SCHEDULE[1],
-        }
-        _save_warmup_state(state)
-        log("warmup_init", "INFO", f"Created warmup_state.json — day 1 limit={WARMUP_SCHEDULE[1]}")
-        return state
-    with open(WARMUP_FILE, "r") as f:
-        return json.load(f)
+    from storage import counters_storage
+    return counters_storage.load_warmup_state()
 
 
 def _save_warmup_state(state: dict):
@@ -89,18 +80,9 @@ def update_warmup_state() -> dict:
     Returns:
         dict: Updated warmup state.
     """
-    state = load_warmup_state()
-    try:
-        start = datetime.date.fromisoformat(state["start_date"])
-    except (KeyError, ValueError):
-        start = datetime.date.today()
-        state["start_date"] = start.isoformat()
-
-    current_day = (datetime.date.today() - start).days + 1
-    state["current_day"] = current_day
-    state["daily_limit_override"] = WARMUP_SCHEDULE.get(current_day, GMAIL_MAX)
-    _save_warmup_state(state)
-    log("warmup_update", "INFO", f"Day {current_day} | limit={state['daily_limit_override']}")
+    from storage import counters_storage
+    state = counters_storage.update_warmup_state()
+    log("warmup_update", "INFO", f"Day {state['current_day']} | limit={state['daily_limit_override']}")
     return state
 
 
@@ -111,8 +93,8 @@ def get_daily_limit() -> int:
     Returns:
         int: Max emails allowed today.
     """
-    state = load_warmup_state()
-    return state.get("daily_limit_override", GMAIL_MAX)
+    from storage import counters_storage
+    return counters_storage.get_daily_limit()
 
 
 # ─── SEND LOG ──────────────────────────────────────────────────────────────────
@@ -137,29 +119,8 @@ def load_send_log() -> dict:
     Returns:
         dict: Send log for the current day.
     """
-    today = datetime.date.today().isoformat()
-    state = load_warmup_state()
-    warmup_day = state.get("current_day", 1)
-
-    if not os.path.exists(SEND_LOG_FILE):
-        return _empty_send_log(today, warmup_day)
-
-    with open(SEND_LOG_FILE, "r") as f:
-        try:
-            data = json.load(f)
-        except (json.JSONDecodeError, ValueError):
-            return _empty_send_log(today, warmup_day)
-
-    if data.get("date") != today:
-        return _empty_send_log(today, warmup_day)
-
-    # Ensure hourly_counts has all 24 keys
-    hc = data.get("hourly_counts", {})
-    for h in range(24):
-        hc.setdefault(str(h), 0)
-    data["hourly_counts"] = hc
-
-    return data
+    from storage import counters_storage
+    return counters_storage.load_send_log()
 
 
 def save_send_log(data: dict):
@@ -169,8 +130,8 @@ def save_send_log(data: dict):
     Parameters:
         data (dict): The full send log dict to write.
     """
-    with open(SEND_LOG_FILE, "w") as f:
-        json.dump(data, f, indent=2)
+    from storage import counters_storage
+    counters_storage.save_send_log(data)
 
 
 def get_today_count() -> int:
@@ -180,7 +141,8 @@ def get_today_count() -> int:
     Returns:
         int: Number of emails sent today.
     """
-    return load_send_log().get("count", 0)
+    from storage import counters_storage
+    return counters_storage.get_today_count()
 
 
 def get_current_hour_count() -> int:
@@ -190,9 +152,8 @@ def get_current_hour_count() -> int:
     Returns:
         int: Number of emails sent in the current hour.
     """
-    data = load_send_log()
-    hour_key = str(datetime.datetime.now().hour)
-    return data.get("hourly_counts", {}).get(hour_key, 0)
+    from storage import counters_storage
+    return counters_storage.get_current_hour_count()
 
 
 def record_send(recipient: str, business_name: str, success: bool, error: str = ""):

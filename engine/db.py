@@ -1,92 +1,81 @@
 """
 db.py — Supabase REST client for FORGE (uses requests, no supabase-py needed)
 Calls Supabase PostgREST API directly so we avoid Python 3.9 package conflicts.
+
+Phase 2: delegates to repositories when STORAGE_BACKEND=postgres.
 """
 
 import os
-import requests
+
 from dotenv import load_dotenv
 
 load_dotenv()
 
-_BASE_URL = None
-_HEADERS = None
 
-
-def _init():
-    global _BASE_URL, _HEADERS
-    if _BASE_URL:
-        return
-    url = os.getenv("SUPABASE_URL") or os.getenv("NEXT_PUBLIC_SUPABASE_URL")
-    key = os.getenv("SUPABASE_SERVICE_KEY") or os.getenv("SUPABASE_SERVICE_ROLE_KEY")
-    if not url or not key:
+def _require_supabase():
+    from repositories.postgres_client import is_configured
+    if not is_configured():
         raise RuntimeError("Missing SUPABASE_URL or SUPABASE_SERVICE_KEY in .env")
-    _BASE_URL = f"{url}/rest/v1"
-    _HEADERS = {
-        "apikey": key,
-        "Authorization": f"Bearer {key}",
-        "Content-Type": "application/json",
-        "Prefer": "return=representation",
-    }
-
-
-def _get(table: str, params: dict = None) -> list:
-    _init()
-    res = requests.get(f"{_BASE_URL}/{table}", headers=_HEADERS, params=params or {})
-    res.raise_for_status()
-    return res.json()
-
-
-def _post(table: str, data) -> list:
-    _init()
-    res = requests.post(f"{_BASE_URL}/{table}", headers=_HEADERS, json=data)
-    res.raise_for_status()
-    return res.json()
-
-
-def _patch(table: str, match: dict, data: dict) -> list:
-    _init()
-    params = {k: f"eq.{v}" for k, v in match.items()}
-    res = requests.patch(f"{_BASE_URL}/{table}", headers=_HEADERS, params=params, json=data)
-    res.raise_for_status()
-    return res.json()
 
 
 def get_leads(filters: dict = None, limit: int = 100, offset: int = 0) -> list:
+    _require_supabase()
+    from repositories import postgres_client as pg
+
     params = {"limit": limit, "offset": offset, "order": "created_at.desc"}
     if filters:
         for k, v in filters.items():
             params[k] = f"eq.{v}"
-    return _get("leads", params)
+    return pg.get("leads", params)
 
 
 def upsert_leads(rows: list) -> list:
-    _init()
-    headers = {**_HEADERS, "Prefer": "resolution=merge-duplicates,return=representation"}
-    res = requests.post(f"{_BASE_URL}/leads", headers=headers, json=rows)
-    res.raise_for_status()
-    return res.json()
+    _require_supabase()
+    from repositories import postgres_client as pg
+    from repositories.lead_mapper import make_dedup_key
+
+    enriched = []
+    for row in rows:
+        r = dict(row)
+        if not r.get("dedup_key") and r.get("business_name"):
+            r["dedup_key"] = make_dedup_key(r)
+        enriched.append(r)
+    return pg.upsert("leads", enriched, on_conflict="dedup_key")
 
 
 def update_lead(lead_id: str, data: dict) -> list:
-    return _patch("leads", {"id": lead_id}, data)
+    _require_supabase()
+    from repositories import postgres_client as pg
+    from repositories.lead_mapper import updates_csv_to_db
+    from storage import use_postgres
+
+    payload = updates_csv_to_db(data) if use_postgres() else data
+    return pg.patch("leads", {"id": lead_id}, payload)
 
 
 def log_outreach(lead_id: str, email: str, name: str, demo_url: str, outreach_type: str = "initial"):
     try:
-        _post("outreach_log", {
-            "lead_id": lead_id,
-            "type": outreach_type,
-            "to_email": email,
-            "to_name": name,
-            "demo_url": demo_url,
-            "success": True,
-        })
+        from repositories import outreach_repo
+        outreach_repo.log_send(
+            lead_id=lead_id,
+            to_email=email,
+            to_name=name,
+            demo_url=demo_url,
+            outreach_type=outreach_type,
+            success=True,
+        )
     except Exception as e:
         print(f"[DB] outreach log error: {e}")
 
 
 def get_stats() -> dict:
+    _require_supabase()
+    from storage import use_postgres
+
+    if use_postgres():
+        from repositories import leads_repo
+        return leads_repo.get_stats()
+
     leads = get_leads(limit=1000)
     counts = {"total": len(leads), "by_status": {}, "by_tier": {}, "by_source": {}}
     for row in leads:

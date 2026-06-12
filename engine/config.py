@@ -62,6 +62,9 @@ class Settings(BaseSettings):
     supabase_url: str = Field(default="", alias="SUPABASE_URL")
     supabase_service_key: str = Field(default="", alias="SUPABASE_SERVICE_KEY")
 
+    # Storage backend (Phase 2): csv | postgres
+    storage_backend: str = Field(default="csv", alias="STORAGE_BACKEND")
+
     # Pipeline dashboard (deprecated)
     forge_dashboard_enabled: bool = Field(default=True, alias="FORGE_DASHBOARD_ENABLED")
 
