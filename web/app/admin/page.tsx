@@ -31,6 +31,10 @@ function AdminContent() {
         authFetch("/api/forge/jobs/list?limit=15"),
         authFetch("/api/forge/health"),
       ]);
+      if (statsRes.status === 403) {
+        setError("Access denied — your account is not authorized for pipeline admin.");
+        return;
+      }
       if (statsRes.ok) setStats(await statsRes.json());
       if (jobsRes.ok) {
         const data = await jobsRes.json();

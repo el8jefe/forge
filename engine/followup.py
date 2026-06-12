@@ -20,7 +20,8 @@ FOLLOWUP_LOG = os.path.join(SCRIPT_DIR, "followup_log.csv")
 
 MY_TEST_EMAIL = os.getenv("MY_TEST_EMAIL", "juanparinconr@gmail.com")
 MY_PHONE = os.getenv("MY_PHONE", "(203) 609-4807")
-TEST_MODE = os.getenv("TEST_MODE", "true").lower() == "true"
+from config import settings as _settings
+TEST_MODE = _settings.test_mode
 GMAIL_SENDER = os.getenv("GMAIL_SENDER", "")
 
 

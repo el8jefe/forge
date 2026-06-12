@@ -1,12 +1,19 @@
 """Postgres lead repository."""
 
-from typing import Dict, List, Optional
+import re
+from typing import Dict, List, Optional, Tuple
 
 from repositories.lead_mapper import csv_row_to_db, db_row_to_csv, updates_csv_to_db
 from repositories import postgres_client as pg
 from system_logger import log
 
 DEDUP_CONFLICT = "dedup_key"
+
+
+def slug_from_name(name: str) -> str:
+    return re.sub(
+        r"[^a-z0-9-]", "", name.lower().replace(" ", "-").replace("'", "").replace(",", "")
+    )
 
 
 def upsert_csv_rows(email_leads: List[dict], call_leads: List[dict]) -> int:
@@ -34,6 +41,44 @@ def list_all(*, email_only: bool = False, limit: int = 5000) -> List[dict]:
 
 def list_email_leads(limit: int = 5000) -> List[dict]:
     return list_all(email_only=True, limit=limit)
+
+
+def update_by_slug(slug: str, updates: dict) -> Tuple[bool, str, str]:
+    """Match lead by business_name slug. Returns (updated, business_name, email)."""
+    slug = slug.strip().lower()
+    if not slug:
+        return False, "", ""
+
+    rows = pg.get("leads", {
+        "source": "eq.forge_scraper",
+        "select": "id,business_name,email",
+        "limit": "5000",
+    })
+    for row in rows:
+        name = (row.get("business_name") or "").strip()
+        if slug_from_name(name) == slug:
+            lead_id = row["id"]
+            pg.patch("leads", {"id": lead_id}, updates_csv_to_db(updates))
+            return True, name, (row.get("email") or "")
+    log("leads_repo", "WARNING", f"no lead found for slug: {slug}")
+    return False, "", ""
+
+
+def update_by_email(email: str, updates: dict) -> int:
+    """Update all leads matching email. Returns count updated."""
+    addr = email.strip().lower()
+    if not addr:
+        return 0
+    rows = pg.get("leads", {
+        "email": f"eq.{addr}",
+        "select": "id",
+        "limit": "50",
+    })
+    count = 0
+    for row in rows:
+        pg.patch("leads", {"id": row["id"]}, updates_csv_to_db(updates))
+        count += 1
+    return count
 
 
 def update_by_business_name(business_name: str, updates: dict) -> bool:

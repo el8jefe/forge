@@ -78,9 +78,44 @@ def _send_internal_email(subject: str, body: str) -> None:
         log("stripe_email", "ERROR", str(e))
 
 
+def _handle_conversion_postgres(slug: str, tier: str, session: dict) -> tuple:
+    from repositories import leads_repo
+
+    plan_def = PLAN_DEFINITIONS.get(tier, {})
+    amount = plan_def.get("amount", 0)
+    customer_id = session.get("customer", "")
+
+    updated, business_name, business_email = leads_repo.update_by_slug(slug, {
+        "status": "won",
+        "notes": (
+            f"Converted: {tier} (${amount}) | "
+            f"stripe_customer={customer_id} | session={session.get('id', '')}"
+        ),
+    })
+    return updated, business_name, business_email, amount
+
+
 def handle_conversion(slug: str, tier: str, session: dict) -> None:
-    """Post-payment conversion — updates leads.csv and logs conversion."""
+    """Post-payment conversion — updates leads storage and logs conversion."""
     try:
+        from storage import use_postgres
+
+        if use_postgres():
+            updated, business_name, business_email, amount = _handle_conversion_postgres(
+                slug, tier, session
+            )
+            if not updated:
+                log("handle_conversion", "WARN", f"no postgres lead for slug={slug}")
+            subject = f"FORGE: New client — {business_name} — {tier} — ${amount}"
+            body = (
+                f"New conversion\n\nBusiness: {business_name}\nEmail: {business_email}\n"
+                f"Plan: {tier}\nAmount: ${amount}\nSession: {session.get('id', '')}\n"
+            )
+            _send_internal_email(subject, body)
+            _push_notification(f"New client: {business_name} — {tier} — ${amount}", level="info")
+            log("handle_conversion", "SUCCESS", f"{business_name} | {tier} | ${amount}")
+            return
+
         rows, fieldnames = _read_leads()
         extra_cols = ["converted", "converted_date", "stripe_customer_id", "plan_tier"]
         for col in extra_cols:

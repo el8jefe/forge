@@ -12,13 +12,14 @@ from config import settings
 FORGE_API_KEY = settings.forge_api_key.strip()
 AUTH_ENABLED = settings.forge_auth_enabled
 
-PUBLIC_PATHS = frozenset({
-    "/health",
-    "/docs",
-    "/openapi.json",
-    "/redoc",
-    "/webhook/stripe",
-})
+def public_paths() -> frozenset:
+    paths = {"/health", "/webhook/stripe"}
+    if settings.forge_openapi_enabled:
+        paths.update({"/docs", "/openapi.json", "/redoc"})
+    return frozenset(paths)
+
+
+PUBLIC_PATHS = public_paths()
 
 
 def is_auth_enabled() -> bool:

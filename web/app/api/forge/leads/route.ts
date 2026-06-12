@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireUserSession } from "@/lib/api-guard";
+import { requireAdminSession } from "@/lib/api-guard";
 import { forge } from "@/lib/forge-client";
 
 export async function GET(req: NextRequest) {
   try {
-    const session = await requireUserSession(req);
+    const session = await requireAdminSession(req);
     if (session instanceof NextResponse) return session;
 
     const { searchParams } = new URL(req.url);

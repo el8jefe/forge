@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     # API security
     forge_api_key: str = Field(default="", alias="FORGE_API_KEY")
     forge_auth_enabled: bool = Field(default=True, alias="FORGE_AUTH_ENABLED")
+    forge_openapi_enabled: bool = Field(default=False, alias="FORGE_OPENAPI_ENABLED")
     forge_api_port: int = Field(default=8000, alias="FORGE_API_PORT")
     forge_cors_origins: str = Field(
         default="http://localhost:3000,https://tradebuilt.io",
@@ -44,7 +45,7 @@ class Settings(BaseSettings):
     gmail_sender: str = Field(default="", alias="GMAIL_SENDER")
     gmail_app_password: str = Field(default="", alias="GMAIL_APP_PASSWORD")
     my_test_email: str = Field(default="", alias="MY_TEST_EMAIL")
-    test_mode: bool = Field(default=True, alias="TEST_MODE")
+    test_mode: bool = Field(default=False, alias="TEST_MODE")
 
     # Stripe
     stripe_secret_key: str = Field(default="sk_test_placeholder", alias="STRIPE_SECRET_KEY")
@@ -76,7 +77,7 @@ class Settings(BaseSettings):
     forge_role: str = Field(default="api", alias="FORGE_ROLE")  # api | worker | beat
 
     # Pipeline dashboard (deprecated)
-    forge_dashboard_enabled: bool = Field(default=True, alias="FORGE_DASHBOARD_ENABLED")
+    forge_dashboard_enabled: bool = Field(default=False, alias="FORGE_DASHBOARD_ENABLED")
 
     @property
     def celery_broker(self) -> str:

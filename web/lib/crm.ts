@@ -1,10 +1,9 @@
 /**
- * CRM — Supabase-backed lead store
- * Replaces the old localStorage implementation.
- * All function signatures are identical so components need no changes.
+ * CRM — Supabase-backed lead store (browser client + RLS)
+ * Used from client components; session must be active for reads/writes.
  */
 
-import { createServerClient } from "@/lib/supabase";
+import { getBrowserClient, supabase } from "@/lib/supabase";
 import type {
   LeadRecord,
   NormalizedBusiness,
@@ -17,7 +16,15 @@ import type {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function db() {
-  return createServerClient();
+  return getBrowserClient();
+}
+
+async function requireUserId(): Promise<string> {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.user?.id) {
+    throw new Error("Sign in required");
+  }
+  return session.user.id;
 }
 
 function rowToRecord(row: Record<string, unknown>): LeadRecord {
@@ -36,7 +43,7 @@ function rowToRecord(row: Record<string, unknown>): LeadRecord {
   };
 }
 
-// ─── Public API (same signatures as the localStorage version) ─────────────────
+// ─── Public API ───────────────────────────────────────────────────────────────
 
 export async function getLeads(): Promise<LeadRecord[]> {
   const { data, error } = await db()
@@ -64,9 +71,11 @@ export async function addLead(
   lead_quality?: LeadQuality,
   demo_url?: string
 ): Promise<LeadRecord> {
+  const userId = await requireUserId();
   const { data, error } = await db()
     .from("leads")
     .insert({
+      user_id: userId,
       business_name: business.name,
       city: business.city,
       state: business.state,

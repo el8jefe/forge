@@ -27,7 +27,8 @@ SCRIPT_DIR    = os.path.dirname(os.path.abspath(__file__))
 APPROVAL_MODE = os.getenv("APPROVAL_MODE", "false").lower() == "true"
 RETRY_QUEUE_FILE = os.path.join(SCRIPT_DIR, "demo_retry_queue.json")
 READY_TO_SEND_REPORT = os.path.join(SCRIPT_DIR, "ready_to_send.csv")
-TEST_MODE = os.getenv("TEST_MODE", "true").lower() == "true"
+from config import settings as _settings
+TEST_MODE = _settings.test_mode
 MAX_RETRIES = 3
 
 

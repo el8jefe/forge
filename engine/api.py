@@ -26,7 +26,17 @@ from system_logger import log
 
 load_dotenv()
 
-app = FastAPI(title="FORGE API", version="3.2")
+_docs_url = "/docs" if settings.forge_openapi_enabled else None
+_redoc_url = "/redoc" if settings.forge_openapi_enabled else None
+_openapi_url = "/openapi.json" if settings.forge_openapi_enabled else None
+
+app = FastAPI(
+    title="FORGE API",
+    version="3.4",
+    docs_url=_docs_url,
+    redoc_url=_redoc_url,
+    openapi_url=_openapi_url,
+)
 
 _cors_origins = settings.cors_origins_list
 

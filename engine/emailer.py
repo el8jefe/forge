@@ -29,7 +29,8 @@ GMAIL_SENDER = os.getenv("GMAIL_SENDER", "juanparinconr@gmail.com")
 GMAIL_APP_PASSWORD = os.getenv("GMAIL_APP_PASSWORD", "")
 MY_TEST_EMAIL = os.getenv("MY_TEST_EMAIL", "juanparinconr@gmail.com")
 MY_PHONE = os.getenv("MY_PHONE", "(203) 609-4807")
-TEST_MODE = os.getenv("TEST_MODE", "true").lower() == "true"
+from config import settings as _settings
+TEST_MODE = _settings.test_mode
 
 GMAIL_MAX = 500
 BURST_LIMIT = 30  # max sends per 60-minute window
@@ -689,11 +690,20 @@ def send_batch(leads: list, demo_urls: dict, stagger: bool = True) -> tuple:
 
 def mark_lead_bounced(email: str):
     """
-    Mark a lead in leads.csv as reply_status=bounced.
+    Mark a lead as reply_status=bounced (Postgres or CSV).
 
     Parameters:
         email (str): The email address that bounced.
     """
+    from storage import use_postgres
+
+    if use_postgres():
+        from repositories import leads_repo
+        count = leads_repo.update_by_email(email, {"reply_status": "bounced"})
+        if count:
+            log("mark_bounced", "INFO", f"Marked {email} as bounced ({count} lead(s))")
+        return
+
     if not os.path.exists(LEADS_CSV):
         return
     rows = []

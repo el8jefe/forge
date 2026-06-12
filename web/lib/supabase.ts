@@ -3,9 +3,9 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js";
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let _client: SupabaseClient<any> | null = null;
 
-// Browser client — lazy singleton
+// Browser client — lazy singleton (use for client-side CRM with RLS)
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function getBrowserClient(): SupabaseClient<any> {
+export function getBrowserClient(): SupabaseClient<any> {
   if (_client) return _client;
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
