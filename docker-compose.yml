@@ -1,0 +1,14 @@
+# FORGE local development stack (Phase 1 scaffold)
+# Usage: docker compose up -d redis
+# API and workers run on host until Phase 3 Dockerfiles land.
+
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - forge_redis:/data
+
+volumes:
+  forge_redis:

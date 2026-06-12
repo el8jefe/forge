@@ -1,0 +1,25 @@
+# OS
+.DS_Store
+
+# Engine
+engine/.env
+engine/.venv/
+engine/venv/
+engine/__pycache__/
+engine/*.csv
+engine/system_log.txt
+engine/scheduler.log
+engine/sites/
+engine/forge.db
+engine/forge.pid
+
+# Web
+web/.env.local
+web/node_modules/
+web/.next/
+web/out/
+web/*.tsbuildinfo
+
+# IDE
+.idea/
+.vscode/

@@ -1,0 +1,18 @@
+{
+  "business_name": "A-1 Greenwich Plumbing",
+  "business_type": "plumber",
+  "phone": "(203) 461-5454",
+  "address": "Greenwich, CT",
+  "services": ["Leak Repair", "Drain Cleaning", "Water Heater Installation", "Pipe Replacement"],
+  "hours": {
+    "monday": "8am-6pm",
+    "tuesday": "8am-6pm",
+    "wednesday": "8am-6pm",
+    "thursday": "8am-6pm",
+    "friday": "8am-6pm",
+    "saturday": "9am-2pm",
+    "sunday": "closed"
+  },
+  "booking_lead_time_hours": 24,
+  "confirmation_sms": true
+}

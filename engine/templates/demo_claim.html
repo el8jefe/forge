@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Your Free Site is Ready — Forge</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --bg: #0a0a0a;
+      --text: #f5f5f0;
+      --muted: #8a8a8a;
+      --gold: #c9a84c;
+      --border: rgba(255,255,255,0.07);
+    }
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'DM Sans', sans-serif;
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── NAV ─────────────────────────────────────────────────────────── */
+    .nav {
+      padding: 0 10%;
+      height: 64px;
+      display: flex;
+      align-items: center;
+      border-bottom: 1px solid var(--border);
+    }
+    .nav-brand {
+      font-family: 'DM Serif Display', serif;
+      font-size: 1.1rem;
+      color: var(--gold);
+      text-decoration: none;
+    }
+
+    /* ── LAYOUT ──────────────────────────────────────────────────────── */
+    .page {
+      display: grid;
+      grid-template-columns: 1fr 420px;
+      min-height: calc(100vh - 64px);
+    }
+    @media (max-width: 880px) {
+      .page { grid-template-columns: 1fr; }
+      .demo-panel { order: -1; min-height: 320px; }
+    }
+
+    /* ── CLAIM SIDE ──────────────────────────────────────────────────── */
+    .claim-side {
+      padding: 64px 10%;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      border-right: 1px solid var(--border);
+    }
+    .eyebrow {
+      font-size: 0.62rem;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: var(--gold);
+      margin-bottom: 20px;
+    }
+    .claim-side h1 {
+      font-family: 'DM Serif Display', serif;
+      font-size: clamp(1.8rem, 4vw, 2.8rem);
+      font-weight: 400;
+      line-height: 1.1;
+      margin-bottom: 16px;
+    }
+    .claim-side h1 em { font-style: italic; }
+    .business-name { color: var(--gold); }
+    .claim-sub {
+      color: var(--muted);
+      font-size: 0.95rem;
+      line-height: 1.75;
+      max-width: 440px;
+      margin-bottom: 40px;
+    }
+
+    /* Plan cards */
+    .plans { display: flex; flex-direction: column; gap: 12px; margin-bottom: 40px; }
+    .plan-card {
+      border: 1px solid var(--border);
+      padding: 20px 22px;
+      cursor: pointer;
+      transition: border-color 0.18s;
+      display: block;
+      text-decoration: none;
+      color: var(--text);
+    }
+    .plan-card:hover, .plan-card.featured { border-color: rgba(201,168,76,0.4); }
+    .plan-card.featured { background: rgba(201,168,76,0.04); }
+    .plan-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+    .plan-name-label { font-size: 0.72rem; letter-spacing: 0.12em; text-transform: uppercase; font-weight: 600; }
+    .plan-price-label {
+      font-family: 'DM Serif Display', serif;
+      font-size: 1.4rem;
+      color: var(--gold);
+    }
+    .plan-desc-label { font-size: 0.82rem; color: var(--muted); }
+    .popular-tag {
+      background: var(--gold);
+      color: #0a0a0a;
+      font-size: 0.58rem;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      padding: 3px 8px;
+      margin-left: 10px;
+    }
+
+    .no-obligation {
+      font-size: 0.78rem;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+    .no-obligation strong { color: var(--text); }
+
+    /* ── DEMO PREVIEW ────────────────────────────────────────────────── */
+    .demo-panel {
+      background: #050505;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    .demo-header {
+      padding: 14px 20px;
+      background: rgba(255,255,255,0.03);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .browser-dot {
+      width: 10px; height: 10px; border-radius: 50%;
+    }
+    .browser-url {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid var(--border);
+      border-radius: 2px;
+      padding: 5px 12px;
+      font-size: 0.72rem;
+      color: var(--muted);
+      flex: 1;
+      max-width: 300px;
+      font-family: monospace;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .demo-frame-wrap {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+    }
+    .demo-frame-wrap iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+      min-height: 600px;
+    }
+    .demo-overlay {
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      background: linear-gradient(to top, rgba(5,5,5,0.9) 0%, transparent 100%);
+      height: 120px;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+
+<nav class="nav">
+  <a href="/" class="nav-brand">Forge</a>
+</nav>
+
+<div class="page">
+
+  <!-- CLAIM SIDE -->
+  <div class="claim-side">
+    <div class="eyebrow">Your free site is ready</div>
+    <h1>
+      We built <span class="business-name">{{ lead.business_name or 'your business' }}</span>
+      a <em>professional</em> website.
+    </h1>
+    <p class="claim-sub">
+      No templates. No website builders. A real site designed for your trade.
+      Preview it to the right, then choose how you want to move forward.
+    </p>
+
+    <div class="plans">
+      <a href="/checkout/starter/{{ slug }}" class="plan-card">
+        <div class="plan-header">
+          <span class="plan-name-label">Starter</span>
+          <span class="plan-price-label">$200</span>
+        </div>
+        <div class="plan-desc-label">One-time. Site published to your domain. Yours to keep.</div>
+      </a>
+
+      <a href="/checkout/growth/{{ slug }}" class="plan-card featured">
+        <div class="plan-header">
+          <span class="plan-name-label">Growth <span class="popular-tag">Popular</span></span>
+          <span class="plan-price-label">$500<span style="font-size:0.8rem;color:var(--muted);font-family:'DM Sans',sans-serif;">/mo</span></span>
+        </div>
+        <div class="plan-desc-label">Site + Google Business Profile management + monthly updates.</div>
+      </a>
+
+      <a href="/checkout/autopilot/{{ slug }}" class="plan-card">
+        <div class="plan-header">
+          <span class="plan-name-label">Autopilot</span>
+          <span class="plan-price-label">$800<span style="font-size:0.8rem;color:var(--muted);font-family:'DM Sans',sans-serif;">/mo</span></span>
+        </div>
+        <div class="plan-desc-label">Everything in Growth + AI booking agent that answers 24/7.</div>
+      </a>
+    </div>
+
+    <p class="no-obligation">
+      <strong>No contract. No setup fee.</strong> Cancel anytime.
+      Questions? Reply to the email we sent you.
+    </p>
+  </div>
+
+  <!-- DEMO PREVIEW PANEL -->
+  <div class="demo-panel">
+    <div class="demo-header">
+      <div class="browser-dot" style="background:#ff5f57;"></div>
+      <div class="browser-dot" style="background:#febc2e;"></div>
+      <div class="browser-dot" style="background:#28c840;"></div>
+      <div class="browser-url">
+        {% if lead.demo_site_path %}{{ lead.demo_site_path }}{% else %}forge-demo-preview{% endif %}
+      </div>
+    </div>
+    <div class="demo-frame-wrap">
+      {% if lead.demo_site_path %}
+      <iframe src="{{ lead.demo_site_path }}" title="Demo site preview" loading="lazy"
+              sandbox="allow-scripts allow-same-origin"></iframe>
+      {% else %}
+      <div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted);font-size:0.9rem;padding:40px;text-align:center;">
+        Demo preview will appear here when the site is built.
+      </div>
+      {% endif %}
+      <div class="demo-overlay"></div>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>

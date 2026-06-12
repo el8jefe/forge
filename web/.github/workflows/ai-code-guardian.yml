@@ -1,0 +1,80 @@
+name: AI Code Guardian
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  guardian:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Checkout
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # 2. Node setup with npm cache
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+
+      # 3. Clean install from lockfile
+      - name: Install dependencies
+        run: npm ci
+
+      # 4. Lint
+      - name: Lint
+        run: npm run lint
+
+      # 5. TypeScript type check (tsconfig already has noEmit: true)
+      - name: Type check
+        run: npx tsc --noEmit
+
+      # 6. Secret scanning — only flags verified, real secrets (not the word "API_KEY")
+      - name: Scan for hardcoded secrets
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: ${{ github.event.repository.default_branch }}
+          head: HEAD
+          extra_args: --only-verified
+
+      # 7. Claude AI Code Review — posts a PR review comment with verdict
+      - name: Claude AI Code Review
+        uses: anthropics/claude-code-action@beta
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          direct_prompt: |
+            You are a strict senior code reviewer. Review only the changed files in this PR.
+
+            BLOCK — label as BLOCKER if you find:
+            - Security vulnerabilities (XSS, injection, exposed secrets, unsafe auth)
+            - Broken logic, undefined variables, or runtime errors
+            - Missing input validation on any user-facing input or API boundary
+
+            FLAG — label as HIGH if you find:
+            - Unhandled errors on external calls (API, DB, file I/O)
+            - Performance issues (N+1 queries, unnecessary rerenders, memory leaks)
+            - Bad naming, deeply nested logic, or logic that will confuse future readers
+
+            NOTE — label as MEDIUM or LOW:
+            - Duplicate code that could be extracted
+            - Minor style or readability improvements
+
+            For every issue found:
+            1. File name + line number
+            2. One-sentence problem description
+            3. Exact fix — show corrected code when possible
+            4. Severity label: LOW / MEDIUM / HIGH / BLOCKER
+
+            End your review with ONLY one of these two lines:
+            ❌ REQUEST CHANGES
+            ✅ APPROVED

@@ -1,0 +1,20 @@
+{
+  "starter": {
+    "product_id": "prod_sim_starter",
+    "price_id": "price_sim_starter",
+    "amount": 200,
+    "type": "one_time"
+  },
+  "growth": {
+    "product_id": "prod_sim_growth",
+    "price_id": "price_sim_growth",
+    "amount": 500,
+    "type": "recurring"
+  },
+  "autopilot": {
+    "product_id": "prod_sim_autopilot",
+    "price_id": "price_sim_autopilot",
+    "amount": 800,
+    "type": "recurring"
+  }
+}
