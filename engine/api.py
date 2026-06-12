@@ -86,13 +86,15 @@ class UpdateLeadRequest(BaseModel):
 
 @app.get("/health")
 def health():
+    from mail.sender import active_provider
     from storage import backend_name
 
     return {
         "status": "ok",
-        "version": "3.3",
+        "version": "3.4",
         "forge": "running",
         "storage": backend_name(),
+        "email": active_provider(),
         "celery": celery_available(),
         "role": settings.forge_role,
         "timestamp": datetime.datetime.utcnow().isoformat(),

@@ -1,5 +1,6 @@
 """Outreach / email event logging."""
 
+import datetime
 from typing import Optional, Set
 
 from repositories import postgres_client as pg
@@ -51,6 +52,50 @@ def contacted_business_names() -> Set[str]:
         "limit": "5000",
     })
     return {(r.get("business_name") or "").strip().lower() for r in rows if r.get("business_name")}
+
+
+def followed_business_names() -> Set[str]:
+    rows = pg.get("outreach_log", {
+        "type": "eq.followup",
+        "success": "eq.true",
+        "select": "to_name",
+        "limit": "5000",
+    })
+    return {(r.get("to_name") or "").strip().lower() for r in rows if r.get("to_name")}
+
+
+def list_followup_candidates(days: int = 3) -> list:
+    """Initial sends at least `days` old without a successful followup."""
+    cutoff = (datetime.datetime.utcnow() - datetime.timedelta(days=days)).isoformat() + "Z"
+    initial = pg.get("outreach_log", {
+        "type": "eq.initial",
+        "success": "eq.true",
+        "sent_at": f"lt.{cutoff}",
+        "select": "lead_id,to_email,to_name,demo_url,sent_at",
+        "limit": "500",
+        "order": "sent_at.asc",
+    })
+    followed = followed_business_names()
+    candidates = []
+    seen = set()
+
+    for row in initial:
+        name = (row.get("to_name") or "").strip()
+        email = (row.get("to_email") or "").strip()
+        demo_url = (row.get("demo_url") or "").strip()
+        key = email.lower()
+        if not email or not demo_url or not name:
+            continue
+        if name.lower() in followed or key in seen:
+            continue
+        seen.add(key)
+        candidates.append({
+            "name": name,
+            "email": email,
+            "demo_url": demo_url,
+            "lead_id": row.get("lead_id") or "",
+        })
+    return candidates
 
 
 def sync_demos_from_failed_sends() -> int:

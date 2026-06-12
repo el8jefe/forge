@@ -7,12 +7,6 @@ uvicorn[standard]>=0.32.0,<1.0
 pydantic>=2.10.0,<3.0
 pydantic-settings>=2.6.0,<3.0
 
-# Platform (legacy Flask — retired Phase 3)
-flask>=3.0.0,<4.0
-flask-session>=0.8.0,<1.0
-gunicorn>=23.0.0,<24.0
-jinja2>=3.1.0,<4.0
-
 # Pipeline
 requests>=2.32.0,<3.0
 beautifulsoup4>=4.12.0,<5.0
@@ -28,4 +22,5 @@ twilio>=9.0.0,<10.0
 celery>=5.4.0,<6.0
 redis>=5.2.0,<6.0
 
-# Logging — structlog deferred until engine/platform/ is renamed (stdlib shadowing)
+# Logging (stdlib platform shadow resolved — Flask archived to _archive/)
+structlog>=24.0.0,<26.0

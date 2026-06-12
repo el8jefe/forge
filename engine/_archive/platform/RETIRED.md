@@ -1,6 +1,6 @@
-# Flask Platform — Retired (Phase 4)
+# Flask platform — archived (Phase 5)
 
-The `engine/platform/` Flask application is **no longer the active UI**. Do not start it in production.
+The Flask SaaS under `engine/_archive/platform/` is **no longer deployed**. Do not start it in production.
 
 ## Replacements
 
@@ -26,4 +26,4 @@ cd forge/web && npm run dev
 
 ## Archive
 
-Code under `engine/platform/` is kept for reference until Phase 5 cleanup. `python3 run.py` exits with an error message.
+Code lives under `engine/_archive/platform/` for reference only. `python3 run.py` exits with an error message.

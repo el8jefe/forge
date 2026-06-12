@@ -5,7 +5,7 @@
 - **Canonical generator**: `POST /build-site` on FastAPI wraps `site_builder.py`
 - **TradeBuilt** `/api/generate-site` proxies to FORGE — removed `template.ts` and `generator.ts`
 - **Admin UI**: `web/app/admin` — pipeline ops (replaces Flask `/admin`)
-- **Flask retired**: `python3 run.py` exits with instructions; see `platform/RETIRED.md`
+- **Flask retired**: `python3 run.py` exits with instructions; see `_archive/platform/RETIRED.md`
 
 ## Routes
 

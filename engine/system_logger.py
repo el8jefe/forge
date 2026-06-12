@@ -2,8 +2,7 @@
 system_logger.py — Centralized logging for FORGE (Phase 1)
 JSON-structured logs to stdout + plain lines to system_log.txt for admin UI.
 
-Note: structlog deferred — engine/platform/ shadows stdlib `platform` module.
-Rename engine/platform/ in Phase 3 before adopting structlog.
+Phase 5: Flask platform archived to _archive/ — stdlib `platform` no longer shadowed.
 """
 
 import datetime

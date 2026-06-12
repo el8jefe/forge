@@ -297,7 +297,18 @@ def get_business_type(name, query=""):
 
 
 def load_existing_leads():
-    """Return set of already-seen business names (lowercase) across all CSV files."""
+    """Return set of already-seen business names (lowercase)."""
+    from storage import use_postgres
+
+    if use_postgres():
+        from repositories import leads_repo
+        names = set()
+        for lead in leads_repo.list_all(limit=10000):
+            key = (lead.get("business_name") or lead.get("name", "")).strip().lower()
+            if key:
+                names.add(key)
+        return names
+
     existing = set()
     for f in [LEADS_CSV, CALL_LIST_CSV]:
         if not os.path.exists(f):

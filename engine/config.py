@@ -37,7 +37,10 @@ class Settings(BaseSettings):
     # Google Places
     google_places_api_key: str = Field(default="", alias="GOOGLE_PLACES_API_KEY")
 
-    # Gmail outreach
+    # Email (Phase 5: Resend production, Gmail dev fallback)
+    email_provider: str = Field(default="auto", alias="EMAIL_PROVIDER")  # auto | resend | gmail
+    resend_api_key: str = Field(default="", alias="RESEND_API_KEY")
+    resend_from_email: str = Field(default="", alias="RESEND_FROM_EMAIL")
     gmail_sender: str = Field(default="", alias="GMAIL_SENDER")
     gmail_app_password: str = Field(default="", alias="GMAIL_APP_PASSWORD")
     my_test_email: str = Field(default="", alias="MY_TEST_EMAIL")

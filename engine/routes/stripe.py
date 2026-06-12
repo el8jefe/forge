@@ -11,7 +11,7 @@ async def stripe_webhook(request: Request) -> Response:
     Stripe webhook endpoint. Verifies signature and processes checkout.session.completed.
     Public path — no FORGE API key required.
     """
-    from platform.stripe_handler import process_stripe_webhook
+    from integrations.stripe_conversions import process_stripe_webhook
 
     payload = await request.body()
     sig_header = request.headers.get("Stripe-Signature", "")

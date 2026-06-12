@@ -1,5 +1,5 @@
 """
-emailer.py — FORGE Gmail SMTP Sender
+emailer.py — FORGE Outreach Sender (Resend production, Gmail fallback)
 Gmail warmup schedule: 80/140/200/260/320/380/500 emails per day over 7 days.
 Burst protection: max 30 emails per 60-minute window.
 Priority queue: HOT leads before WARM leads, sorted by score descending within tier.
@@ -557,8 +557,9 @@ def send_email(lead: dict, demo_url: str) -> bool:
         log("send_email", "SKIP", f"{lead.get('business_name', '?')} — suppressed ({reply_status})")
         return False
 
-    if not GMAIL_APP_PASSWORD:
-        log("send_email", "ERROR", "GMAIL_APP_PASSWORD not set in .env")
+    from mail.sender import active_provider
+    if active_provider() == "none":
+        log("send_email", "ERROR", "No email provider configured (RESEND_API_KEY or GMAIL_APP_PASSWORD)")
         return False
 
     daily_limit = get_daily_limit()
@@ -587,19 +588,20 @@ def send_email(lead: dict, demo_url: str) -> bool:
 
     subject, html_body, plain_body = build_html_email(lead, demo_url)
 
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = subject
-    msg["From"] = GMAIL_SENDER
-    msg["To"] = to_address
-    msg["Reply-To"] = GMAIL_SENDER
-    msg.attach(MIMEText(plain_body, "plain"))
-    msg.attach(MIMEText(html_body, "html"))
-
     try:
-        server = smtplib.SMTP_SSL("smtp.gmail.com", 465)
-        server.login(GMAIL_SENDER, GMAIL_APP_PASSWORD)
-        server.sendmail(GMAIL_SENDER, to_address, msg.as_string())
-        server.quit()
+        from mail.sender import send_message
+        ok, err = send_message(
+            to=to_address,
+            subject=subject,
+            html=html_body,
+            plain=plain_body,
+            reply_to=GMAIL_SENDER or None,
+        )
+        if not ok:
+            record_send(to_address, name, success=False, error=err)
+            log("send_email", "ERROR", f"{name} -> {to_address} | {err}")
+            print(f"  Email failed for {name}: {err}")
+            return False
         record_send(to_address, name, success=True)
         log("send_email", "SUCCESS", f"{name} -> {to_address}")
         print(f"  Email sent: {name} -> {to_address}")
@@ -713,25 +715,12 @@ def mark_lead_bounced(email: str):
 
 
 def send_summary_email(subject: str, body: str):
-    """
-    Send a plain-text summary to MY_TEST_EMAIL (admin notifications).
-
-    Parameters:
-        subject (str): Email subject.
-        body (str): Plain text body.
-    """
-    if not GMAIL_APP_PASSWORD:
+    """Send a plain-text summary to MY_TEST_EMAIL (admin notifications)."""
+    if not MY_TEST_EMAIL:
         return
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = subject
-    msg["From"] = GMAIL_SENDER
-    msg["To"] = MY_TEST_EMAIL
-    msg.attach(MIMEText(body, "plain"))
     try:
-        server = smtplib.SMTP_SSL("smtp.gmail.com", 465)
-        server.login(GMAIL_SENDER, GMAIL_APP_PASSWORD)
-        server.sendmail(GMAIL_SENDER, MY_TEST_EMAIL, msg.as_string())
-        server.quit()
+        from mail.sender import send_message
+        send_message(to=MY_TEST_EMAIL, subject=subject, html=f"<pre>{body}</pre>", plain=body)
         log("send_summary_email", "SUCCESS", subject[:60])
     except Exception as e:
         log("send_summary_email", "ERROR", str(e))

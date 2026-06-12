@@ -1,6 +1,6 @@
 # FORGE Architecture
 
-Last updated: Phase 4 (Next.js-only UI)
+Last updated: Phase 5 (production hardening)
 
 ## Overview
 
@@ -14,17 +14,18 @@ forge/
 └── docs/            Architecture and runbooks
 ```
 
-## Current state (Phase 4)
+## Current state (Phase 5)
 
 | Layer | Technology | Status |
 |-------|------------|--------|
 | Frontend | Next.js 16 (`web/`) | Active — sole UI (`/generate`, `/admin`, `/dashboard`) |
-| API | FastAPI (`engine/api.py`) | Active — auth, Stripe, `POST /build-site` |
-| Legacy platform | Flask (`engine/platform/`) | Retired — `run.py` exits; see `RETIRED.md` |
+| API | FastAPI (`engine/api.py`) | Active — v3.4, auth, Stripe, build-site |
+| Legacy platform | `engine/_archive/platform/` | Archived — not deployed |
 | Pipeline scheduler | Celery beat + `agent.py` | Beat @ 00/06/12/18 UTC |
 | Database | Supabase Postgres | `STORAGE_BACKEND=csv\|postgres` |
 | Jobs | Celery + `pipeline_jobs` | Redis broker, in-memory fallback |
-| Email | Gmail SMTP | Dev only — Resend in Phase 5 |
+| Email | Resend + Gmail fallback | `mail/sender.py` (engine), Resend (web) |
+| CI | GitHub Actions | `.github/workflows/ci.yml` |
 
 ## Target state (post-migration)
 
@@ -49,7 +50,9 @@ web (Vercel)  →  FastAPI (Railway)  →  Supabase Postgres
 | `celery_app.py` | Worker configuration | Redis |
 | `tasks/pipeline.py` | Async job definitions | Celery |
 | `job_dispatcher.py` | Celery or BackgroundTasks | Redis fallback |
-| `platform/` | Legacy Flask SaaS | CSV, JSON (legacy) |
+| `mail/sender.py` | Resend / Gmail delivery | Pipeline outreach |
+| `integrations/` | Stripe conversions | Webhook handler |
+| `_archive/platform/` | Retired Flask SaaS | Reference only |
 | `db.py` | Supabase REST client | `repositories/` |
 | `storage/` | CSV ↔ Postgres facade | `STORAGE_BACKEND` |
 | `repositories/` | PostgREST data access | Supabase |
@@ -77,7 +80,7 @@ See `engine/PHASE0-SECURITY.md` for setup.
 
 ## Deprecated (do not extend)
 
-- `engine/platform/whitelabel.py` — white-label reseller
+- `engine/_archive/platform/` — retired Flask SaaS
 - `engine/pipeline_dashboard.py` — local dev dashboard only
 - `engine/dashboard.py` — superseded by admin portal
 - `web/services/template.ts` + `generator.ts` — removed Phase 4 (use `site_builder.py`)
@@ -139,15 +142,24 @@ python agent.py --once
 | 2 | Postgres as sole source of truth | Done |
 | 3 | FastAPI + Celery, retire Flask | Done |
 | 4 | Next.js only UI | Done |
-| 5 | Production email, tests, CI | Pending |
+| 5 | Production email, tests, CI | Done |
 
 ## Changelog
+
+### Phase 5
+- Resend email for engine pipeline (`mail/sender.py`) with Gmail dev fallback
+- `followup.py` + `scraper.load_existing_leads()` wired to Postgres storage
+- Stripe webhook extracted to `integrations/stripe_conversions.py`
+- Flask platform archived to `engine/_archive/platform/`
+- CI: `.github/workflows/ci.yml` (engine tests + web build)
+- Tests: mail sender, job dispatcher, stripe webhook (+ existing mapper/jobs tests)
+- See `engine/PHASE5-PRODUCTION.md`
 
 ### Phase 4
 - `POST /build-site` on FastAPI — canonical `site_builder.py` generator
 - TradeBuilt `/api/generate-site` proxies to FORGE; removed `template.ts` + `generator.ts`
 - `web/app/admin` — pipeline operations UI (replaces Flask admin)
-- Flask platform retired (`run.py` exits, `platform/RETIRED.md`)
+- Flask platform retired (`run.py` exits, `_archive/platform/RETIRED.md`)
 - See `engine/PHASE4-UI.md`
 
 ### Phase 3
